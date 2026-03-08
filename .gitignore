@@ -1,0 +1,11 @@
+# macOS clutter
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Files that might appear in the same directory
+Icon?
+._*
+
+# Thumbnails
+._.DS_Store
