@@ -15,11 +15,12 @@ def collect_paths(root, exts={".jpg",".jpeg",".png"}):
 # )
 
 # Maja path
-paths_real = collect_paths("../wiki")
+SCRIPT_DIR = Path(__file__).resolve().parent
+paths_real = collect_paths(SCRIPT_DIR.parent / "wiki")
 paths_fake = (
-    collect_paths("../inpainting") +
-    collect_paths("../insight") +
-    collect_paths("../text2img")
+    collect_paths(SCRIPT_DIR.parent / "inpainting") +
+    collect_paths(SCRIPT_DIR.parent / "insight") +
+    collect_paths(SCRIPT_DIR.parent / "text2img")
 )
 
 paths = paths_real + paths_fake
@@ -109,8 +110,6 @@ y_np   = np.concatenate(all_y, axis=0)
 print(X_feat.shape, y_np.shape)
 
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
 
 def extract_subsets(X_feat = X_feat, y_np = y_np, test_size=0.2, random_state=42):
     return train_test_split(
