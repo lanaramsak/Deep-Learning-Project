@@ -1,12 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import models
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image, UnidentifiedImageError
-import random
 import numpy as np
-from pathlib import Path
-from torchvision import transforms
 from sklearn.model_selection import train_test_split
 from import_data import get_loader
 
