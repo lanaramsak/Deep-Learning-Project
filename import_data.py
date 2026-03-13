@@ -1,6 +1,5 @@
 from pathlib import Path
 import random
-import numpy as np
 from PIL import Image, UnidentifiedImageError
 
 def collect_paths(root, exts={".jpg",".jpeg",".png"}):
@@ -82,43 +81,9 @@ class PathLabelDataset(Dataset):
             img = self.transform(img)
         label = torch.tensor(self.labels[idx], dtype=torch.long)
         return img, label
-    
-import torch.nn as nn
-from torchvision import models
-
-resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-resnet.fc = nn.Identity()          # zdaj output = embedding (512 dim)
-resnet.eval()
-resnet.to("cpu")
 
 dataset = PathLabelDataset(paths_small, y_small, transform=transform)
 loader = DataLoader(dataset, batch_size=64, shuffle=False, num_workers=0)
 
-all_feats = []
-all_y = []
-
-with torch.no_grad():
-    for Xb, yb in loader:
-        Xb = Xb.to("cpu")
-        feats = resnet(Xb)              # (B, 512)
-        all_feats.append(feats.cpu().numpy())
-        all_y.append(yb.numpy())
-
-X_feat = np.concatenate(all_feats, axis=0)
-y_np   = np.concatenate(all_y, axis=0)
-
-print(X_feat.shape, y_np.shape)
-
-from sklearn.model_selection import train_test_split
-
-def extract_subsets(X_feat = X_feat, y_np = y_np, test_size=0.2, random_state=42):
-    return train_test_split(
-            X_feat,
-            y_np,
-            test_size=0.2,
-            random_state=42,
-            stratify=y_np,
-            shuffle=True
-        )
-
-X_train, X_test, y_train, y_test = extract_subsets(X_feat, y_np)
+def get_loader():
+    return loader
