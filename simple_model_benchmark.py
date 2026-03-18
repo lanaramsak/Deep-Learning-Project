@@ -39,8 +39,8 @@ def build_pipeline(config, pca_components):
 
 def get_dataset(extractor_name):
     if extractor_name == "resnet18":
-        from import_data import extract_subsets
-        return extract_subsets()
+        from ResNet18 import extract_subsets_ResNet18
+        return extract_subsets_ResNet18()
     if extractor_name == "resnet50":
         from ResNet50 import extract_subsets_ResNet50
         return extract_subsets_ResNet50()
@@ -121,24 +121,6 @@ def format_summary(results):
         )
 
     return "\n".join(lines)
-
-
-def format_details(results):
-    blocks = []
-    for result in sorted(results, key=lambda item: item["auc"], reverse=True):
-        block = [
-            f"Model: {result['model']}",
-            f"F1: {result['f1']:.4f}",
-            f"AUC: {result['auc']:.4f}",
-            f"EER: {result['eer']:.4f}",
-        ]
-        if result["pca_components"] is not None:
-            block.append(f"PCA components: {result['pca_components']}")
-            block.append(f"Explained variance: {result['explained_variance']:.4f}")
-        block.append("Classification report:")
-        block.append(result["report"])
-        blocks.append("\n".join(block))
-    return "\n\n".join(blocks)
 
 
 def save_results(output_dir, summaries):
