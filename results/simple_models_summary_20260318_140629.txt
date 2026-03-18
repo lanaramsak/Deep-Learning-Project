@@ -1,0 +1,56 @@
+All Extractors Summary
+
+Summary for resnet18
+Model                      F1      AUC      EER  PCA comps   Expl.Var
+---------------------------------------------------------------------
+SVM-RBF                0.5579   0.6582   0.4000        212     0.9504
+LinearRegression       0.6311   0.6564   0.3700        212     0.9504
+MLP                    0.6010   0.6393   0.4100        212     0.9504
+LogisticRegression     0.6100   0.6331   0.3900        212     0.9504
+RandomForest           0.5484   0.6258   0.4300          -          -
+KNN                    0.5700   0.5786   0.4300        212     0.9504
+GaussianNB             0.5550   0.5682   0.4500        212     0.9504
+
+Summary for resnet50
+Model                      F1      AUC      EER  PCA comps   Expl.Var
+---------------------------------------------------------------------
+MLP                    0.6495   0.7380   0.3400        504     0.9501
+RandomForest           0.6500   0.7331   0.3500          -          -
+LogisticRegression     0.6632   0.7283   0.3200        504     0.9501
+SVM-RBF                0.6599   0.7241   0.3500        504     0.9501
+LinearRegression       0.6492   0.7149   0.3500        504     0.9501
+KNN                    0.6582   0.6300   0.3962        504     0.9501
+GaussianNB             0.6548   0.5288   0.4786        504     0.9501
+
+Summary for mobilenet
+Model                      F1      AUC      EER  PCA comps   Expl.Var
+---------------------------------------------------------------------
+RandomForest           0.6392   0.7193   0.3400          -          -
+SVM-RBF                0.5859   0.6953   0.4100        443     0.9502
+LinearRegression       0.6355   0.6440   0.3800        443     0.9502
+MLP                    0.6346   0.6406   0.4000        443     0.9502
+LogisticRegression     0.5951   0.6096   0.4300        443     0.9502
+KNN                    0.5753   0.5755   0.4592        443     0.9502
+GaussianNB             0.6423   0.5562   0.4530        443     0.9502
+
+Summary for inceptionv3
+Model                      F1      AUC      EER  PCA comps   Expl.Var
+---------------------------------------------------------------------
+RandomForest           0.5445   0.6113   0.4450          -          -
+SVM-RBF                0.5714   0.6022   0.4300        379     0.9502
+MLP                    0.5915   0.5876   0.4400        379     0.9502
+KNN                    0.5926   0.5743   0.4355        379     0.9502
+GaussianNB             0.6484   0.5613   0.4300        379     0.9502
+LinearRegression       0.5534   0.5604   0.4500        379     0.9502
+LogisticRegression     0.5274   0.5555   0.4800        379     0.9502
+
+Summary for efficientnet
+Model                      F1      AUC      EER  PCA comps   Expl.Var
+---------------------------------------------------------------------
+SVM-RBF                0.6162   0.6850   0.3700        421     0.9500
+LogisticRegression     0.6373   0.6772   0.3600        421     0.9500
+MLP                    0.5918   0.6643   0.3900        421     0.9500
+RandomForest           0.5714   0.6577   0.3867          -          -
+LinearRegression       0.5990   0.6501   0.4300        421     0.9500
+GaussianNB             0.6667   0.5692   0.4500        421     0.9500
+KNN                    0.5887   0.5532   0.4716        421     0.9500
