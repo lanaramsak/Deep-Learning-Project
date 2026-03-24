@@ -1,0 +1,147 @@
+import torch
+import torch.nn as nn
+from torchvision import models
+import numpy as np
+from evaluation_metrics import get_classification_report, get_f1_score, get_auc_score, get_eer_score
+import random
+from torch.utils.data import DataLoader
+from torch.utils.data import random_split
+
+from import_data import get_sample_paths, PathLabelDataset, build_transform
+
+random.seed(42)
+N_SAMPLES_PER_CLASS = 500
+
+def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=32, train_split=0.8):
+    # 1. Collect and filter all sample paths
+    paths, labels = get_sample_paths(n=n)
+    
+    # 2. Create the full dataset
+    full_dataset = PathLabelDataset(paths, labels, transform=build_transform(224))
+
+    # 3. Calculate lengths for split
+    train_len = int(len(full_dataset) * train_split)
+    test_len = len(full_dataset) - train_len
+
+    # 4. Perform the random split
+    train_ds, test_ds = random_split(
+        full_dataset, 
+        [train_len, test_len],
+        generator=torch.Generator().manual_seed(42)
+    )
+
+    # 5. Create two separate loaders
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+
+    return train_loader, test_loader
+
+train_loader, test_loader = get_loaders()
+
+# MOBILENETV2 FEATURE EXTRACTION
+mobilenet = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
+
+if hasattr(mobilenet.classifier, 'in_features'):
+    num_ftrs = mobilenet.classifier.in_features
+else:
+    # If we already replaced it, we know MobileNetV2 uses 1280
+    num_ftrs = 1280
+
+mobilenet.classifier = nn.Sequential(
+    nn.Dropout(0.2),
+    nn.Linear(1280, 512),
+    nn.ReLU(),
+    nn.Dropout(0.3),
+    nn.Linear(512, 1)  # Single output for binary classification
+)
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Freeze all "backbone" layers (initially)
+# This prevents the gradients from changing the pre-trained weights
+for param in mobilenet.parameters():
+    param.requires_grad = False
+
+for param in mobilenet.classifier.parameters():
+    param.requires_grad = True
+
+mobilenet.to(device)
+
+# Use BCEWithLogitsLoss because we have 1 output node
+criterion = nn.BCEWithLogitsLoss()
+
+# Only optimize the parameters that are NOT frozen (the new fc head)
+optimizer = torch.optim.Adam(mobilenet.classifier.parameters(), lr=0.001)
+
+def train_fine_tune(model, loader, optimizer, criterion, epochs=5):
+    model.train()
+    for epoch in range(epochs):
+        running_loss = 0.0
+        for images, labels in loader:
+            images, labels = images.to(device), labels.to(device).float().view(-1, 1)
+            
+            optimizer.zero_grad()
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            
+            running_loss += loss.item()
+        print(f"Epoch {epoch+1}, Loss: {running_loss/len(loader):.4f}")
+
+# Phase 1: Train just the head
+train_fine_tune(mobilenet, train_loader, optimizer, criterion, epochs=10)
+
+for name, child in mobilenet.features.named_children():
+    if int(name) >= 15: # GRID SEARCH THIS NUMBER LATER
+        for param in child.parameters(): # Unfreeze the deeper layers for fine-tuning
+            param.requires_grad = True
+
+# Use a MUCH smaller learning rate for fine-tuning the backbone
+# You don't want to "break" the pre-trained weights, just nudge them.
+optimizer = torch.optim.Adam(mobilenet.parameters(), lr=0.00001)
+
+# Phase 2: Fine-tune the deeper layers + the head
+train_fine_tune(mobilenet, train_loader, optimizer, criterion, epochs=3)
+
+def evaluate_mobilenet_model(model, loader, device):
+    model.eval()
+    all_labels = []
+    all_probs = []
+    all_preds = []
+
+    print("Evaluating MobileNetV2...")
+    with torch.no_grad():
+        for images, labels in loader:
+            images = images.to(device)
+            
+            # Forward pass - MobileNetV2 outputs raw logits for binary classification
+            logits = model(images) 
+            
+            # Use Sigmoid for binary (1-node) classification
+            probs = torch.sigmoid(logits).squeeze()
+            
+            # Threshold at 0.5 for hard predictions
+            preds = (probs > 0.5).float()
+
+            # Handle single-item batch case (squeezing might remove batch dim)
+            if probs.dim() == 0:
+                all_probs.append(probs.item())
+                all_preds.append(preds.item())
+            else:
+                all_probs.extend(probs.cpu().numpy())
+                all_preds.extend(preds.cpu().numpy())
+                
+            all_labels.extend(labels.numpy())
+
+    y_test = np.array(all_labels)
+    y_probs = np.array(all_probs)
+    final_preds = np.array(all_preds)
+
+    print("\n" + "="*30 + "\nMOBILENETV2 PERFORMANCE\n" + "="*30)
+    print(f"F1 Score:  {get_f1_score(y_test, final_preds):.4f}")
+    print(f"AUC Score: {get_auc_score(y_test, y_probs):.4f}")
+    print(f"EER Score: {get_eer_score(y_test, y_probs):.4f}")
+    print("\nClassification Report:\n", get_classification_report(y_test, final_preds))
+
+evaluate_mobilenet_model(mobilenet, test_loader, device)

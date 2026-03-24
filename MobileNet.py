@@ -7,9 +7,6 @@ from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL, get_loader
 
 # MOBILENETV2 FEATURE EXTRACTION
 mobilenet = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
-
-# In MobileNetV2, the "head" is called 'classifier' instead of 'fc'
-# We replace the classifier with an Identity layer to get the 1280-dim features
 mobilenet.classifier = nn.Identity()
 
 mobilenet.eval()
