@@ -1,3 +1,4 @@
+
 from argparse import ArgumentParser
 from dataclasses import dataclass
 from datetime import datetime
@@ -25,6 +26,120 @@ class ModelConfig:
     estimator: object
     use_scaler: bool = False
     use_pca: bool = False
+
+
+def get_optional_model_configs():
+    configs = []
+
+    try:
+        from xgboost import XGBClassifier
+        configs.append(
+            ModelConfig(
+                name="XGBoost",
+                estimator=XGBClassifier(
+                    n_estimators=300,
+                    max_depth=6,
+                    learning_rate=0.05,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    eval_metric="logloss",
+                    random_state=42,
+                ),
+                use_scaler=False,
+                use_pca=False,
+            )
+        )
+    except ImportError:
+        pass
+
+    try:
+        from lightgbm import LGBMClassifier
+        configs.append(
+            ModelConfig(
+                name="LightGBM",
+                estimator=LGBMClassifier(
+                    n_estimators=300,
+                    learning_rate=0.05,
+                    num_leaves=31,
+                    random_state=42,
+                    verbose=-1,
+                ),
+                use_scaler=False,
+                use_pca=False,
+            )
+        )
+    except ImportError:
+        pass
+
+    try:
+        from catboost import CatBoostClassifier
+        configs.append(
+            ModelConfig(
+                name="CatBoost",
+                estimator=CatBoostClassifier(
+                    iterations=300,
+                    learning_rate=0.05,
+                    depth=6,
+                    random_seed=42,
+                    verbose=0,
+                ),
+                use_scaler=False,
+                use_pca=False,
+            )
+        )
+    except ImportError:
+        pass
+
+    return configs
+
+
+def get_model_configs():
+    configs = [
+        ModelConfig(
+            name="LinearRegression",
+            estimator=LinearRegression(),
+            use_scaler=True,
+            use_pca=True,
+        ),
+        ModelConfig(
+            name="LogisticRegression",
+            estimator=LogisticRegression(max_iter=2000),
+            use_scaler=True,
+            use_pca=True,
+        ),
+        ModelConfig(
+            name="KNN",
+            estimator=KNeighborsClassifier(n_neighbors=5),
+            use_scaler=True,
+            use_pca=True,
+        ),
+        ModelConfig(
+            name="GaussianNB",
+            estimator=GaussianNB(),
+            use_scaler=True,
+            use_pca=True,
+        ),
+        ModelConfig(
+            name="SVM-RBF",
+            estimator=SVC(kernel="rbf"),
+            use_scaler=True,
+            use_pca=True,
+        ),
+        ModelConfig(
+            name="RandomForest",
+            estimator=RandomForestClassifier(n_estimators=300, random_state=42),
+            use_scaler=False,
+            use_pca=False,
+        ),
+        ModelConfig(
+            name="MLP",
+            estimator=MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500, random_state=42),
+            use_scaler=True,
+            use_pca=True,
+        ),
+    ]
+    configs.extend(get_optional_model_configs())
+    return configs
 
 
 def build_pipeline(config, pca_components):
@@ -136,51 +251,7 @@ def save_results(output_dir, summaries):
 
 def run_benchmark(extractor_name, pca_components, output_dir, save_report=True, print_top_model=True):
     X_train, X_test, y_train, y_test = get_dataset(extractor_name)
-
-    configs = [
-        ModelConfig(
-            name="LinearRegression",
-            estimator=LinearRegression(),
-            use_scaler=True,
-            use_pca=True,
-        ),
-        ModelConfig(
-            name="LogisticRegression",
-            estimator=LogisticRegression(max_iter=2000),
-            use_scaler=True,
-            use_pca=True,
-        ),
-        ModelConfig(
-            name="KNN",
-            estimator=KNeighborsClassifier(n_neighbors=5),
-            use_scaler=True,
-            use_pca=True,
-        ),
-        ModelConfig(
-            name="GaussianNB",
-            estimator=GaussianNB(),
-            use_scaler=True,
-            use_pca=True,
-        ),
-        ModelConfig(
-            name="SVM-RBF",
-            estimator=SVC(kernel="rbf"),
-            use_scaler=True,
-            use_pca=True,
-        ),
-        ModelConfig(
-            name="RandomForest",
-            estimator=RandomForestClassifier(n_estimators=300, random_state=42),
-            use_scaler=False,
-            use_pca=False,
-        ),
-        ModelConfig(
-            name="MLP",
-            estimator=MLPClassifier(hidden_layer_sizes=(128, 64), max_iter=500, random_state=42),
-            use_scaler=True,
-            use_pca=True,
-        ),
-    ]
+    configs = get_model_configs()
 
     results = []
     for config in configs:
