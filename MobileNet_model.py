@@ -36,73 +36,77 @@ def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=32, train_split=0.8):
 
     return train_loader, test_loader
 
-train_loader, test_loader = get_loaders()
-
-# MOBILENETV2 FEATURE EXTRACTION
-mobilenet = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
-
-if hasattr(mobilenet.classifier, 'in_features'):
-    num_ftrs = mobilenet.classifier.in_features
-else:
-    # If we already replaced it, we know MobileNetV2 uses 1280
-    num_ftrs = 1280
-
-mobilenet.classifier = nn.Sequential(
-    nn.Dropout(0.2),
-    nn.Linear(1280, 512),
-    nn.ReLU(),
-    nn.Dropout(0.3),
-    nn.Linear(512, 1)  # Single output for binary classification
-)
-
+# train_loader, test_loader = get_loaders()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Freeze all "backbone" layers (initially)
-# This prevents the gradients from changing the pre-trained weights
-for param in mobilenet.parameters():
-    param.requires_grad = False
+# MOBILENETV2 MOBILE TRAINING
+def get_trained_MobileNet_model(train_loader, device):
+    mobilenet = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT)
 
-for param in mobilenet.classifier.parameters():
-    param.requires_grad = True
+    if hasattr(mobilenet.classifier, 'in_features'):
+        num_ftrs = mobilenet.classifier.in_features
+    else:
+        # If we already replaced it, we know MobileNetV2 uses 1280
+        num_ftrs = 1280
 
-mobilenet.to(device)
+    mobilenet.classifier = nn.Sequential(
+        nn.Dropout(0.2),
+        nn.Linear(1280, 512),
+        nn.ReLU(),
+        nn.Dropout(0.3),
+        nn.Linear(512, 1)  # Single output for binary classification
+    )
 
-# Use BCEWithLogitsLoss because we have 1 output node
-criterion = nn.BCEWithLogitsLoss()
+    # Freeze all "backbone" layers (initially)
+    # This prevents the gradients from changing the pre-trained weights
+    for param in mobilenet.parameters():
+        param.requires_grad = False
 
-# Only optimize the parameters that are NOT frozen (the new fc head)
-optimizer = torch.optim.Adam(mobilenet.classifier.parameters(), lr=0.001)
+    for param in mobilenet.classifier.parameters():
+        param.requires_grad = True
 
-def train_fine_tune(model, loader, optimizer, criterion, epochs=5):
-    model.train()
-    for epoch in range(epochs):
-        running_loss = 0.0
-        for images, labels in loader:
-            images, labels = images.to(device), labels.to(device).float().view(-1, 1)
-            
-            optimizer.zero_grad()
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            
-            running_loss += loss.item()
-        print(f"Epoch {epoch+1}, Loss: {running_loss/len(loader):.4f}")
+    mobilenet.to(device)
 
-# Phase 1: Train just the head
-train_fine_tune(mobilenet, train_loader, optimizer, criterion, epochs=10)
+    # Use BCEWithLogitsLoss because we have 1 output node
+    criterion = nn.BCEWithLogitsLoss()
 
-for name, child in mobilenet.features.named_children():
-    if int(name) >= 15: # GRID SEARCH THIS NUMBER LATER
-        for param in child.parameters(): # Unfreeze the deeper layers for fine-tuning
-            param.requires_grad = True
+    # Only optimize the parameters that are NOT frozen (the new fc head)
+    optimizer = torch.optim.Adam(mobilenet.classifier.parameters(), lr=0.001)
 
-# Use a MUCH smaller learning rate for fine-tuning the backbone
-# You don't want to "break" the pre-trained weights, just nudge them.
-optimizer = torch.optim.Adam(mobilenet.parameters(), lr=0.00001)
+    def train_fine_tune(model, loader, optimizer, criterion, epochs=5):
+        model.train()
+        for epoch in range(epochs):
+            running_loss = 0.0
+            for images, labels in loader:
+                images, labels = images.to(device), labels.to(device).float().view(-1, 1)
+                
+                optimizer.zero_grad()
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                optimizer.step()
+                
+                running_loss += loss.item()
+            print(f"Epoch {epoch+1}, Loss: {running_loss/len(loader):.4f}")
 
-# Phase 2: Fine-tune the deeper layers + the head
-train_fine_tune(mobilenet, train_loader, optimizer, criterion, epochs=3)
+    # Phase 1: Train just the head
+    train_fine_tune(mobilenet, train_loader, optimizer, criterion, epochs=10)
+
+    for name, child in mobilenet.features.named_children():
+        if int(name) >= 15: # GRID SEARCH THIS NUMBER LATER
+            for param in child.parameters(): # Unfreeze the deeper layers for fine-tuning
+                param.requires_grad = True
+
+    # Use a MUCH smaller learning rate for fine-tuning the backbone
+    # You don't want to "break" the pre-trained weights, just nudge them.
+    optimizer = torch.optim.Adam(mobilenet.parameters(), lr=0.00001)
+
+    # Phase 2: Fine-tune the deeper layers + the head
+    train_fine_tune(mobilenet, train_loader, optimizer, criterion, epochs=3)
+
+    return mobilenet
+
+# mobilenet = get_trained_MobileNet_model(train_loader, device)
 
 def evaluate_mobilenet_model(model, loader, device):
     model.eval()
@@ -144,4 +148,4 @@ def evaluate_mobilenet_model(model, loader, device):
     print(f"EER Score: {get_eer_score(y_test, y_probs):.4f}")
     print("\nClassification Report:\n", get_classification_report(y_test, final_preds))
 
-evaluate_mobilenet_model(mobilenet, test_loader, device)
+# evaluate_mobilenet_model(mobilenet, test_loader, device)

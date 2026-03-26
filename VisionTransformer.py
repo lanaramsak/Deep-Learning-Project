@@ -50,48 +50,54 @@ def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=32, train_split=0.8):
 
     return train_loader, test_loader
 
-train_loader, test_loader = get_loaders()
+# train_loader, test_loader = get_loaders()
 
-# Define the model with 2 classes: 0=Real, 1=Fake
-model = ViTForImageClassification.from_pretrained(
-    model_name,
-    num_labels=2,
-    id2label={0: "Real", 1: "Fake"},
-    label2id={"Real": 0, "Fake": 1}
-)
+def get_trained_ViT_model(train_loader, device):
+    
+
+    # Define the model with 2 classes: 0=Real, 1=Fake
+    model = ViTForImageClassification.from_pretrained(
+        model_name,
+        num_labels=2,
+        id2label={0: "Real", 1: "Fake"},
+        label2id={"Real": 0, "Fake": 1}
+    )
+
+    model.to(device)
+
+    # 2. DEFINE TRAINING COMPONENTS
+    optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
+    criterion = nn.CrossEntropyLoss()
+
+    # 3. THE TRAINING LOOP
+    def train_one_epoch(model, loader, optimizer, criterion):
+        model.train()
+        total_loss = 0
+        for batch in loader:
+            # 'loader' provides (images, labels) from your PathLabelDataset
+            images, labels = batch
+            images, labels = images.to(device), labels.to(device)
+
+            optimizer.zero_grad()
+            
+            # ViT expects 'pixel_values'
+            outputs = model(pixel_values=images, labels=labels)
+            loss = outputs.loss
+            
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+        
+        return total_loss / len(loader)
+
+    # Run for a few epochs
+    for epoch in range(5):
+        avg_loss = train_one_epoch(model, train_loader, optimizer, criterion)    
+        print(f"Epoch {epoch+1} | Loss: {avg_loss:.4f}")
+    return model
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-
-# 2. DEFINE TRAINING COMPONENTS
-optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
-criterion = nn.CrossEntropyLoss()
-
-# 3. THE TRAINING LOOP
-def train_one_epoch(model, loader, optimizer, criterion):
-    model.train()
-    total_loss = 0
-    for batch in loader:
-        # 'loader' provides (images, labels) from your PathLabelDataset
-        images, labels = batch
-        images, labels = images.to(device), labels.to(device)
-
-        optimizer.zero_grad()
-        
-        # ViT expects 'pixel_values'
-        outputs = model(pixel_values=images, labels=labels)
-        loss = outputs.loss
-        
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
-    
-    return total_loss / len(loader)
-
-# Run for a few epochs
-for epoch in range(5):
-    avg_loss = train_one_epoch(model, train_loader, optimizer, criterion)    
-    print(f"Epoch {epoch+1} | Loss: {avg_loss:.4f}")
+# model = get_trained_ViT_model(train_loader, device)
 
 # 4. EVALUATE ON TEST SET
 def evaluate_vit_model(model, loader, device):
@@ -136,4 +142,4 @@ def evaluate_vit_model(model, loader, device):
     print("\nClassification Report:")
     print(get_classification_report(y_test, final_preds))
 
-evaluate_vit_model(model, test_loader, device)
+# evaluate_vit_model(model, test_loader, device)
