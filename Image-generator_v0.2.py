@@ -43,7 +43,7 @@ OUTPUT_DIR = Path(__file__).parent / "generated"
 # Trainingsparameter
 N_TRAIN_IMAGES = 2000        # [SCALE UP] None → alle verfügbaren Bilder verwenden
 IMAGE_SIZE     = 64         # [SCALE UP] 128 oder 256 für deutlich bessere Gesichtsqualität
-EPOCHS         = 50          # CPU: 5 Epochen (~15 Min) | [SCALE UP] GPU: 100+
+EPOCHS         = 25          # CPU: 5 Epochen (~15 Min) | [SCALE UP] GPU: 100+
 BATCH_SIZE     = 16         # CPU: 16 | [SCALE UP] GPU: 64
 LR             = 2e-4       # Lernrate (gut bewährt für DDPM)
 
@@ -54,6 +54,8 @@ SCHEDULE       = "cosine"   # "cosine" ist besser als "linear" (Nichol & Dhariwa
 # U-Net Kanäle: bestimmt Modellgröße und Qualität
 # CPU: [32, 64, 128] → ~500K Parameter, ~3 Min/Epoche
 # [SCALE UP] GPU: [64, 128, 256] oder [128, 256, 512]
+# CHANNELS       = [128, 256, 512]
+# CHANNELS       = [64, 128, 256]
 CHANNELS       = [32, 64, 128]
 
 # Sampling: DPM-Solver++ braucht nur 20 Schritte statt 1000 — viel schneller
@@ -86,10 +88,14 @@ class RealFaceDataset(Dataset):
         print(f"Datensatz: {len(self.paths)} Bilder aus {image_dir}")
 
         self.transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(),          # Daten-Augmentation
             transforms.Resize((image_size, image_size)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            # Color Jitter: Helps the model handle different lighting conditions
+            # brightness/contrast/saturation: 0.1 is subtle but effective
+            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1),
+            # transforms.RandomRotation(degrees=5), 
             transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),  # → [-1, 1]
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
         ])
 
     def __len__(self):
@@ -242,6 +248,8 @@ class UNet(nn.Module):
         self.down1_res2 = ResBlock(C1, C1, t_dim)
         self.down1_pool = nn.Conv2d(C1, C1, 3, stride=2, padding=1)   # 64 → 32
 
+        self.down1_attn = SelfAttention(C1)
+
         self.down2_res1 = ResBlock(C1, C2, t_dim)
         self.down2_res2 = ResBlock(C2, C2, t_dim)
         self.down2_pool = nn.Conv2d(C2, C2, 3, stride=2, padding=1)   # 32 → 16
@@ -255,6 +263,8 @@ class UNet(nn.Module):
         self.up1_up   = nn.ConvTranspose2d(C2, C2, 2, stride=2)       # 16 → 32
         self.up1_res1 = ResBlock(C2 + C2, C1, t_dim)
         self.up1_res2 = ResBlock(C1, C1, t_dim)
+
+        self.up1_attn = SelfAttention(C1)
 
         self.up2_up   = nn.ConvTranspose2d(C1, C1, 2, stride=2)       # 32 → 64
         self.up2_res1 = ResBlock(C1 + C1, C0, t_dim)
@@ -281,6 +291,7 @@ class UNet(nn.Module):
         # Encoder
         x  = self.in_conv(x)
         x  = self.down1_res2(self.down1_res1(x, t_emb), t_emb)
+        x = self.down1_attn(x)
         s1 = x                                              # Skip-Connection speichern
         x  = self.down1_pool(x)
 
@@ -296,6 +307,7 @@ class UNet(nn.Module):
         # Decoder
         x = torch.cat([self.up1_up(x), s2], dim=1)
         x = self.up1_res2(self.up1_res1(x, t_emb), t_emb)
+        x = self.up1_attn(x)
 
         x = torch.cat([self.up2_up(x), s1], dim=1)
         x = self.up2_res2(self.up2_res1(x, t_emb), t_emb)
