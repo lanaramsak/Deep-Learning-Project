@@ -1,16 +1,23 @@
 """
-DDPM Face Generation — DeepFakeFace (DFF) Dataset
-==================================================
+DDPM Face Generation — DeepFakeFace (DFF) Dataset  v0.2
+========================================================
 Four documented improvement phases:
   Phase 1 – Baseline U-Net, no attention, linear schedule, DDPM 1000 steps
-  Phase 2 – + Self-attention at 16×16 bottleneck
+  Phase 2 – + Self-attention at 16×16 bottleneck AND 32×32 encoder/decoder
   Phase 3 – + Cosine noise schedule (replace linear)
   Phase 4 – + DPM-Solver++(2M) sampler (20 steps vs 1000)
 
+Changes vs v0.1:
+  - AdamW (weight_decay=1e-4) instead of Adam
+  - CosineAnnealingLR scheduler (fixes loss plateau after epoch ~20)
+  - Scheduler state saved/restored in checkpoints
+  - Self-attention now also at 32×32 resolution in Phase 2+ (DownBlock/UpBlock)
+  - val_set dataset bug fixed: no-augmentation view shares the same path list
+
 Usage:
-  python ddpm_pipeline.py --phase 1          # run single phase
-  python ddpm_pipeline.py --phase all        # run all four phases sequentially
-  python ddpm_pipeline.py --phase 4 --epochs 5  # quick test
+  python ddpm_pipeline_v0.2.py --phase 1          # run single phase
+  python ddpm_pipeline_v0.2.py --phase all        # run all four phases sequentially
+  python ddpm_pipeline_v0.2.py --phase 4 --epochs 5  # quick test
 """
 
 import os, sys, math, copy, json, time, argparse, logging
@@ -40,8 +47,8 @@ except ImportError:
 # 1.  CONFIGURATION
 # ──────────────────────────────────────────────────────────────
 
-BASE_DIR = Path("/data/01/up202402612/data")
-REAL_DIR = Path("/data/01/up202402612/data/wiki")   # project root
+BASE_DIR = Path(os.environ.get("DDPM_BASE_DIR", "/data/01/up202402612/data"))
+REAL_DIR = Path("/data/01/up202402612/data/wiki")
 
 DATA_DIRS = [
     str(BASE_DIR / "inpainting"),
@@ -72,6 +79,8 @@ class Config:
     epochs:       int       = 100
     batch_size:   int       = 64
     lr:           float     = 2e-4
+    lr_min:       float     = 1e-6    # [v0.2] cosine annealing floor
+    weight_decay: float     = 1e-4    # [v0.2] AdamW weight decay
     ema_decay:    float     = 0.9999
     use_fp16:     bool      = True
     grad_clip:    float     = 1.0
@@ -117,6 +126,7 @@ class FakeFaceDataset(Dataset):
     """Loads fake face images from the three DFF generators."""
 
     def __init__(self, data_dirs: List[str], image_size: int = 64, augment: bool = True):
+        self.image_size = image_size
         self.paths: List[Path] = []
         for d in data_dirs:
             p = Path(d)
@@ -127,15 +137,29 @@ class FakeFaceDataset(Dataset):
             self.paths.extend(p.rglob("*.png"))
         print(f"Dataset: {len(self.paths):,} images from {len(data_dirs)} dirs")
 
+        self.transform = self._build_transform(augment)
+
+    def _build_transform(self, augment: bool) -> transforms.Compose:
         tf_list: list = []
         if augment:
             tf_list.append(transforms.RandomHorizontalFlip())
         tf_list += [
-            transforms.Resize((image_size, image_size)),
+            transforms.Resize((self.image_size, self.image_size)),
             transforms.ToTensor(),
             transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),  # → [-1, 1]
         ]
-        self.transform = transforms.Compose(tf_list)
+        return transforms.Compose(tf_list)
+
+    def without_augmentation(self) -> "FakeFaceDataset":
+        """
+        [v0.2] Returns a view with augmentation disabled that shares the same
+        path list — no second rglob, guaranteed identical ordering.
+        """
+        view = FakeFaceDataset.__new__(FakeFaceDataset)
+        view.image_size = self.image_size
+        view.paths      = self.paths          # shared reference, same order
+        view.transform  = self._build_transform(augment=False)
+        return view
 
     def __len__(self) -> int:
         return len(self.paths)
@@ -153,8 +177,8 @@ def build_dataloaders(cfg: Config):
         full, [n_train, n_val],
         generator=torch.Generator().manual_seed(42)
     )
-    # Val set: no augmentation
-    val_set.dataset = FakeFaceDataset(cfg.data_dirs, cfg.image_size, augment=False)
+    # [v0.2] Use a view with augmentation disabled — same path list, same indices
+    val_set.dataset = full.without_augmentation()
 
     train_loader = DataLoader(
         train_set, batch_size=cfg.batch_size, shuffle=True,
@@ -295,27 +319,37 @@ class SelfAttention(nn.Module):
 
 
 class DownBlock(nn.Module):
-    def __init__(self, in_ch: int, out_ch: int, t_dim: int):
+    # [v0.2] optional attention at this resolution (used for 32×32 in Phase 2+)
+    def __init__(self, in_ch: int, out_ch: int, t_dim: int, use_attention: bool = False):
         super().__init__()
         self.res1 = ResBlock(in_ch, out_ch, t_dim)
         self.res2 = ResBlock(out_ch, out_ch, t_dim)
+        # 4 heads for 32×32 (128 ch), 8 heads reserved for bottleneck (256 ch)
+        n_heads = 4 if out_ch <= 128 else 8
+        self.attn = SelfAttention(out_ch, n_heads) if use_attention else nn.Identity()
         self.down = nn.Conv2d(out_ch, out_ch, 3, stride=2, padding=1)
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
         x = self.res2(self.res1(x, t), t)
+        x = self.attn(x)
         return self.down(x), x   # downsampled, skip
 
 
 class UpBlock(nn.Module):
-    def __init__(self, in_ch: int, skip_ch: int, out_ch: int, t_dim: int):
+    # [v0.2] optional attention at this resolution (used for 32×32 in Phase 2+)
+    def __init__(self, in_ch: int, skip_ch: int, out_ch: int, t_dim: int,
+                 use_attention: bool = False):
         super().__init__()
         self.up   = nn.ConvTranspose2d(in_ch, in_ch, 2, stride=2)
         self.res1 = ResBlock(in_ch + skip_ch, out_ch, t_dim)
         self.res2 = ResBlock(out_ch, out_ch, t_dim)
+        n_heads = 4 if out_ch <= 128 else 8
+        self.attn = SelfAttention(out_ch, n_heads) if use_attention else nn.Identity()
 
     def forward(self, x: torch.Tensor, skip: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         x = torch.cat([self.up(x), skip], dim=1)
-        return self.res2(self.res1(x, t), t)
+        x = self.res2(self.res1(x, t), t)
+        return self.attn(x)
 
 
 class UNet(nn.Module):
@@ -323,10 +357,12 @@ class UNet(nn.Module):
     U-Net denoiser for 64×64 images.
 
     Encoder:   64×64 → 32×32 → 16×16
-    Bottleneck: 16×16  (optional self-attention here)
+    Bottleneck: 16×16  (self-attention in Phase 2+)
     Decoder:   16×16 → 32×32 → 64×64
 
     channels = [C0=64, C1=128, C2=256]
+
+    [v0.2] Phase 2+ also applies self-attention at 32×32 in down1/up2.
     """
 
     def __init__(self, in_ch: int = 3, channels: List[int] = None,
@@ -344,17 +380,19 @@ class UNet(nn.Module):
         self.in_conv = nn.Conv2d(in_ch, C0, 3, padding=1)
 
         # Encoder
-        self.down1 = DownBlock(C0, C1, t_dim)   # 64→32, skip (B,C1,64,64)
-        self.down2 = DownBlock(C1, C2, t_dim)   # 32→16, skip (B,C2,32,32)
+        # [v0.2] down1 (32×32) gets attention when use_attention=True
+        self.down1 = DownBlock(C0, C1, t_dim, use_attention=use_attention)  # 64→32
+        self.down2 = DownBlock(C1, C2, t_dim, use_attention=False)          # 32→16
 
-        # Bottleneck at 16×16
+        # Bottleneck at 16×16 (attention with 8 heads)
         self.mid1 = ResBlock(C2, C2, t_dim)
-        self.mid_attn = SelfAttention(C2) if use_attention else nn.Identity()
+        self.mid_attn = SelfAttention(C2, n_heads=8) if use_attention else nn.Identity()
         self.mid2 = ResBlock(C2, C2, t_dim)
 
         # Decoder
-        self.up1 = UpBlock(C2, C2, C1, t_dim)   # 16→32
-        self.up2 = UpBlock(C1, C1, C0, t_dim)   # 32→64
+        self.up1 = UpBlock(C2, C2, C1, t_dim, use_attention=False)          # 16→32
+        # [v0.2] up2 (32×32) gets attention when use_attention=True
+        self.up2 = UpBlock(C1, C1, C0, t_dim, use_attention=use_attention)  # 32→64
 
         self.out_norm = nn.GroupNorm(32, C0)
         self.out_conv = nn.Conv2d(C0, in_ch, 3, padding=1)
@@ -631,8 +669,13 @@ def train(cfg: Config, device: torch.device) -> dict:
     log.info(f"Model parameters: {model.param_count:,}")
     log.info(f"Schedule: {cfg.schedule} | Attention: {cfg.use_attention}")
 
-    # ── optimiser & scaler ──────────────────────────────────
-    optim  = torch.optim.Adam(model.parameters(), lr=cfg.lr)
+    # ── optimiser, scheduler & scaler ──────────────────────
+    # [v0.2] AdamW with weight decay instead of Adam
+    optim = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    # [v0.2] Cosine annealing: lr decays from cfg.lr → cfg.lr_min over all epochs
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optim, T_max=cfg.epochs, eta_min=cfg.lr_min
+    )
     scaler = GradScaler(enabled=cfg.use_fp16)
 
     # ── metrics storage ─────────────────────────────────────
@@ -691,7 +734,10 @@ def train(cfg: Config, device: torch.device) -> dict:
         val_loss = v_loss / v_batches
         history["val_loss"].append(val_loss)
 
-        log.info(f"Epoch {epoch:03d} | train_loss={train_loss:.4f}  val_loss={val_loss:.4f}")
+        # [v0.2] Step the LR scheduler after each epoch
+        lr_scheduler.step()
+        current_lr = lr_scheduler.get_last_lr()[0]
+        log.info(f"Epoch {epoch:03d} | train_loss={train_loss:.4f}  val_loss={val_loss:.4f}  lr={current_lr:.2e}")
 
         # ── sample grid ────────────────────────────────────
         if epoch % cfg.sample_every == 0 or epoch == cfg.epochs:
@@ -703,7 +749,6 @@ def train(cfg: Config, device: torch.device) -> dict:
             # FID at final epoch and every sample_every epochs
             if SCIPY_AVAILABLE:
                 if real_fid_imgs is None:
-                    # Load REAL wiki images as FID reference
                     real_dataset = FakeFaceDataset([str(REAL_DIR)], cfg.image_size, augment=False)
                     real_loader_fid = DataLoader(real_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers)
                     real_list = []
@@ -732,6 +777,7 @@ def train(cfg: Config, device: torch.device) -> dict:
                 "model":      model.state_dict(),
                 "ema":        ema.state_dict(),
                 "optim":      optim.state_dict(),
+                "scheduler":  lr_scheduler.state_dict(),   # [v0.2] save scheduler state
                 "config":     asdict(cfg),
             }
             torch.save(ckpt, ckpt_dir / f"ckpt_epoch_{epoch:04d}.pt")
@@ -794,10 +840,13 @@ def plot_results(all_histories: List[dict], out_dir: str = "./ddpm_runs"):
         for i, v in enumerate(fid_vals):
             axes[1].text(i, v + 0.5, f"{v:.1f}", ha="center", fontsize=9)
 
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = out / f"phase_comparison_{ts}.png"
     plt.tight_layout()
-    plt.savefig(out / "phase_comparison.png", dpi=150)
+    plt.savefig(out_path, dpi=150)
     plt.close()
-    print(f"Saved comparison plot → {out / 'phase_comparison.png'}")
+    print(f"Saved comparison plot → {out_path}")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -805,13 +854,13 @@ def plot_results(all_histories: List[dict], out_dir: str = "./ddpm_runs"):
 # ──────────────────────────────────────────────────────────────
 
 def parse_args():
-    p = argparse.ArgumentParser(description="DDPM pipeline — DFF fake faces")
+    p = argparse.ArgumentParser(description="DDPM pipeline v0.2 — DFF fake faces")
     p.add_argument("--phase",   default="1",
                    help="1 | 2 | 3 | 4 | all  (default: 1)")
     p.add_argument("--epochs",  type=int, default=None,
                    help="Override number of epochs (e.g. 5 for quick test)")
     p.add_argument("--batch",   type=int, default=None, help="Override batch size")
-    p.add_argument("--log_dir", default="./ddpm_runs", help="Output directory")
+    p.add_argument("--log_dir", default="./ddpm_runs_v02", help="Output directory")
     p.add_argument("--no_fp16", action="store_true", help="Disable mixed precision")
     return p.parse_args()
 
@@ -831,14 +880,23 @@ def main():
     if args.batch   is not None: overrides["batch_size"] = args.batch
     if args.no_fp16:              overrides["use_fp16"]  = False
 
-    phases = [1, 2, 3, 4] if args.phase == "all" else [int(args.phase)]
+    if args.phase == "all":
+        phases = [1, 2, 3, 4]
+    elif "-" in args.phase:
+        start, end = args.phase.split("-")
+        phases = list(range(int(start), int(end) + 1))
+    elif "," in args.phase:
+        phases = [int(p) for p in args.phase.split(",")]
+    else:
+        phases = [int(args.phase)]
     all_histories = []
 
     for ph in phases:
         cfg = get_phase_config(ph, **overrides)
         print(f"\n{'='*60}")
-        print(f"  Phase {ph}: {cfg.phase_name}")
+        print(f"  Phase {ph}: {cfg.phase_name}  [v0.2]")
         print(f"  attention={cfg.use_attention}  schedule={cfg.schedule}  sampler={cfg.sampler}({cfg.sample_steps})")
+        print(f"  optimizer=AdamW(wd={cfg.weight_decay})  lr={cfg.lr}→{cfg.lr_min} (cosine)")
         print(f"{'='*60}\n")
         h = train(cfg, device)
         all_histories.append(h)

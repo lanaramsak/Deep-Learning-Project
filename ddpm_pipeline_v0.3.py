@@ -1,16 +1,38 @@
 """
-DDPM Face Generation — DeepFakeFace (DFF) Dataset
-==================================================
-Four documented improvement phases:
+DDPM Face Generation — Real Face Training (v0.3)
+=================================================
+Goal: Train a DDPM on REAL face images (wiki dataset) to learn the true
+      face distribution, then generate new synthetic ("deepfake") faces
+      that look realistic.
+
+Four documented improvement phases (each builds on the previous):
   Phase 1 – Baseline U-Net, no attention, linear schedule, DDPM 1000 steps
   Phase 2 – + Self-attention at 16×16 bottleneck
   Phase 3 – + Cosine noise schedule (replace linear)
   Phase 4 – + DPM-Solver++(2M) sampler (20 steps vs 1000)
 
-Usage:
-  python ddpm_pipeline.py --phase 1          # run single phase
-  python ddpm_pipeline.py --phase all        # run all four phases sequentially
-  python ddpm_pipeline.py --phase 4 --epochs 5  # quick test
+Changes vs v0.2:
+  - Trains on REAL wiki images (was: 3 fake generators) — this is the core fix
+  - Reverted 32×32 attention (kept only bottleneck) — fixes CUDA OOM
+  - FID reference = held-out wiki images (proper train/FID split)
+  - Default log_dir = ./ddpm_runs_v03 (separate from previous runs)
+  - Clear HPC-ready defaults (paths, batch size)
+
+Kept from v0.2:
+  - AdamW (weight_decay=1e-4)
+  - CosineAnnealingLR scheduler
+  - Scheduler state saved/restored in checkpoints
+  - val_set dataset bug fix (shared path list, no-augment view)
+
+Usage on HPC:
+  sbatch -p normal --qos gpu_batch --gres=gpu:1 --time=12:00:00 \
+    --job-name "ddpm_v03_p2" \
+    --wrap "python3 ~/ddpm_pipeline_v0.3.py --phase 2 --epochs 100"
+
+  # All phases sequentially:
+  sbatch -p normal --qos gpu_batch --gres=gpu:1 --time=12:00:00 \
+    --job-name "ddpm_v03_all" \
+    --wrap "python3 ~/ddpm_pipeline_v0.3.py --phase all --epochs 100"
 """
 
 import os, sys, math, copy, json, time, argparse, logging
@@ -40,22 +62,20 @@ except ImportError:
 # 1.  CONFIGURATION
 # ──────────────────────────────────────────────────────────────
 
-BASE_DIR = Path("/data/01/up202402612/data")
-REAL_DIR = Path("/data/01/up202402612/data/wiki")   # project root
+# Base data directory (can be overridden via env var)
+BASE_DIR = Path(os.environ.get("DDPM_BASE_DIR", "/data/01/up202402612/data"))
 
-DATA_DIRS = [
-    str(BASE_DIR / "inpainting"),
-    str(BASE_DIR / "insight"),
-    str(BASE_DIR / "text2img"),
-]
+# REAL face images (wiki) — used for BOTH training and FID reference
+REAL_DIR = BASE_DIR / "wiki"
 
 
 @dataclass
 class Config:
     # ── data ──────────────────────────────────────────────────
-    data_dirs:    List[str] = field(default_factory=lambda: DATA_DIRS)
+    # [v0.3] Single directory with REAL faces (was: 3 fake dirs)
+    data_dirs:    List[str] = field(default_factory=lambda: [str(REAL_DIR)])
     image_size:   int       = 64
-    val_split:    float     = 0.10
+    val_split:    float     = 0.10   # 10% held out for val loss & FID reference
     num_workers:  int       = 4
 
     # ── model ─────────────────────────────────────────────────
@@ -72,24 +92,25 @@ class Config:
     epochs:       int       = 100
     batch_size:   int       = 64
     lr:           float     = 2e-4
+    lr_min:       float     = 1e-6    # cosine annealing floor
+    weight_decay: float     = 1e-4    # AdamW weight decay
     ema_decay:    float     = 0.9999
     use_fp16:     bool      = True
     grad_clip:    float     = 1.0
 
     # ── sampling ──────────────────────────────────────────────
     sampler:      str       = "ddpm"    # "ddpm" | "ddim" | "dpm_solver"
-    sample_steps: int       = 1000     # inference steps
-    n_samples:    int       = 16       # for visualisation grid
+    sample_steps: int       = 1000
+    n_samples:    int       = 16
 
     # ── logging ───────────────────────────────────────────────
-    log_dir:         str  = "./ddpm_runs"
+    log_dir:         str  = "./ddpm_runs_v03"   # [v0.3] new output dir
     sample_every:    int  = 10
     checkpoint_every: int = 10
     phase_name:      str  = "phase1_baseline"
-    fid_n_samples:   int  = 2048   # generated samples for FID
+    fid_n_samples:   int  = 2048
 
 
-# Four phase configs — each builds on the previous
 def get_phase_config(phase: int, **overrides) -> Config:
     cfg = Config()
     if phase >= 2:
@@ -113,10 +134,11 @@ def get_phase_config(phase: int, **overrides) -> Config:
 # 2.  DATASET
 # ──────────────────────────────────────────────────────────────
 
-class FakeFaceDataset(Dataset):
-    """Loads fake face images from the three DFF generators."""
+class FaceDataset(Dataset):
+    """Loads face images from given directories. Works for real or fake sets."""
 
     def __init__(self, data_dirs: List[str], image_size: int = 64, augment: bool = True):
+        self.image_size = image_size
         self.paths: List[Path] = []
         for d in data_dirs:
             p = Path(d)
@@ -125,17 +147,28 @@ class FakeFaceDataset(Dataset):
                 continue
             self.paths.extend(p.rglob("*.jpg"))
             self.paths.extend(p.rglob("*.png"))
-        print(f"Dataset: {len(self.paths):,} images from {len(data_dirs)} dirs")
+        print(f"Dataset: {len(self.paths):,} images from {len(data_dirs)} dir(s)")
 
+        self.transform = self._build_transform(augment)
+
+    def _build_transform(self, augment: bool) -> transforms.Compose:
         tf_list: list = []
         if augment:
             tf_list.append(transforms.RandomHorizontalFlip())
         tf_list += [
-            transforms.Resize((image_size, image_size)),
+            transforms.Resize((self.image_size, self.image_size)),
             transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),  # → [-1, 1]
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
         ]
-        self.transform = transforms.Compose(tf_list)
+        return transforms.Compose(tf_list)
+
+    def without_augmentation(self) -> "FaceDataset":
+        """Return a view with augmentation disabled (shares path list)."""
+        view = FaceDataset.__new__(FaceDataset)
+        view.image_size = self.image_size
+        view.paths      = self.paths
+        view.transform  = self._build_transform(augment=False)
+        return view
 
     def __len__(self) -> int:
         return len(self.paths)
@@ -146,15 +179,14 @@ class FakeFaceDataset(Dataset):
 
 
 def build_dataloaders(cfg: Config):
-    full = FakeFaceDataset(cfg.data_dirs, cfg.image_size, augment=True)
-    n_val  = int(len(full) * cfg.val_split)
+    full = FaceDataset(cfg.data_dirs, cfg.image_size, augment=True)
+    n_val   = int(len(full) * cfg.val_split)
     n_train = len(full) - n_val
     train_set, val_set = random_split(
         full, [n_train, n_val],
         generator=torch.Generator().manual_seed(42)
     )
-    # Val set: no augmentation
-    val_set.dataset = FakeFaceDataset(cfg.data_dirs, cfg.image_size, augment=False)
+    val_set.dataset = full.without_augmentation()
 
     train_loader = DataLoader(
         train_set, batch_size=cfg.batch_size, shuffle=True,
@@ -164,7 +196,7 @@ def build_dataloaders(cfg: Config):
         val_set, batch_size=cfg.batch_size, shuffle=False,
         num_workers=cfg.num_workers, pin_memory=True
     )
-    return train_loader, val_loader
+    return train_loader, val_loader, val_set
 
 
 # ──────────────────────────────────────────────────────────────
@@ -172,10 +204,7 @@ def build_dataloaders(cfg: Config):
 # ──────────────────────────────────────────────────────────────
 
 class NoiseScheduler:
-    """
-    Implements DDPM noise schedule and closed-form forward process
-    q(x_t | x_0) = N(x_t; sqrt(ᾱ_t)·x_0, (1−ᾱ_t)·I).
-    """
+    """DDPM noise schedule with closed-form forward process."""
 
     def __init__(self, T: int = 1000, schedule: str = "linear",
                  beta_start: float = 1e-4, beta_end: float = 2e-2):
@@ -193,8 +222,8 @@ class NoiseScheduler:
         else:
             raise ValueError(f"Unknown schedule: {schedule!r}")
 
-        alphas             = 1.0 - betas
-        alphas_cumprod     = torch.cumprod(alphas, dim=0)
+        alphas              = 1.0 - betas
+        alphas_cumprod      = torch.cumprod(alphas, dim=0)
         alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
 
         self.betas              = betas
@@ -202,11 +231,9 @@ class NoiseScheduler:
         self.alphas_cumprod     = alphas_cumprod
         self.alphas_cumprod_prev = alphas_cumprod_prev
 
-        # Forward process helpers
         self.sqrt_alphas_cumprod      = alphas_cumprod.sqrt()
         self.sqrt_one_minus_alphas_cumprod = (1 - alphas_cumprod).sqrt()
 
-        # Posterior q(x_{t-1} | x_t, x_0)
         self.posterior_variance = betas * (1 - alphas_cumprod_prev) / (1 - alphas_cumprod)
         self.posterior_log_var  = torch.log(self.posterior_variance.clamp(min=1e-20))
         self.posterior_mean_c1  = betas * alphas_cumprod_prev.sqrt() / (1 - alphas_cumprod)
@@ -219,25 +246,19 @@ class NoiseScheduler:
                 setattr(self, attr, v.to(device))
         return self
 
-    def q_sample(self, x0: torch.Tensor, t: torch.Tensor,
-                 noise: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Closed-form forward process — add noise at any timestep in one shot."""
+    def q_sample(self, x0, t, noise=None):
         if noise is None:
             noise = torch.randn_like(x0)
         s  = self.sqrt_alphas_cumprod[t][:, None, None, None]
         s1 = self.sqrt_one_minus_alphas_cumprod[t][:, None, None, None]
         return s * x0 + s1 * noise, noise
 
-    def predict_x0(self, xt: torch.Tensor, t: torch.Tensor,
-                   eps: torch.Tensor) -> torch.Tensor:
-        """Recover x0 estimate from noise prediction."""
+    def predict_x0(self, xt, t, eps):
         s  = self.sqrt_alphas_cumprod[t][:, None, None, None]
         s1 = self.sqrt_one_minus_alphas_cumprod[t][:, None, None, None]
         return (xt - s1 * eps) / s
 
-    def p_mean_var(self, eps: torch.Tensor, xt: torch.Tensor,
-                   t: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """DDPM reverse-process posterior mean and log-variance."""
+    def p_mean_var(self, eps, xt, t):
         x0_pred = self.predict_x0(xt, t, eps).clamp(-1, 1)
         mean = (
             self.posterior_mean_c1[t][:, None, None, None] * x0_pred
@@ -252,17 +273,16 @@ class NoiseScheduler:
 # ──────────────────────────────────────────────────────────────
 
 def sinusoidal_emb(t: torch.Tensor, dim: int) -> torch.Tensor:
-    """Sinusoidal timestep embeddings (Vaswani et al.)."""
     half = dim // 2
     freqs = torch.exp(
         -math.log(10_000) * torch.arange(half, dtype=torch.float32, device=t.device) / half
     )
-    args = t[:, None].float() * freqs[None]      # (B, half)
-    return torch.cat([args.cos(), args.sin()], dim=-1)   # (B, dim)
+    args = t[:, None].float() * freqs[None]
+    return torch.cat([args.cos(), args.sin()], dim=-1)
 
 
 class ResBlock(nn.Module):
-    def __init__(self, in_ch: int, out_ch: int, t_dim: int, dropout: float = 0.1):
+    def __init__(self, in_ch, out_ch, t_dim, dropout=0.1):
         super().__init__()
         self.norm1  = nn.GroupNorm(32, in_ch)
         self.conv1  = nn.Conv2d(in_ch, out_ch, 3, padding=1)
@@ -272,7 +292,7 @@ class ResBlock(nn.Module):
         self.conv2  = nn.Conv2d(out_ch, out_ch, 3, padding=1)
         self.skip   = nn.Conv2d(in_ch, out_ch, 1) if in_ch != out_ch else nn.Identity()
 
-    def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> torch.Tensor:
+    def forward(self, x, t_emb):
         h = self.conv1(F.silu(self.norm1(x)))
         h = h + self.t_proj(F.silu(t_emb))[:, :, None, None]
         h = self.conv2(self.drop(F.silu(self.norm2(h))))
@@ -280,40 +300,38 @@ class ResBlock(nn.Module):
 
 
 class SelfAttention(nn.Module):
-    """Multi-head self-attention over spatial positions."""
-
-    def __init__(self, ch: int, n_heads: int = 8):
+    def __init__(self, ch, n_heads=8):
         super().__init__()
         self.norm = nn.GroupNorm(32, ch)
         self.attn = nn.MultiheadAttention(ch, n_heads, batch_first=True)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         B, C, H, W = x.shape
-        h = self.norm(x).reshape(B, C, H * W).permute(0, 2, 1)   # (B, HW, C)
+        h = self.norm(x).reshape(B, C, H * W).permute(0, 2, 1)
         h, _ = self.attn(h, h, h)
         return x + h.permute(0, 2, 1).reshape(B, C, H, W)
 
 
 class DownBlock(nn.Module):
-    def __init__(self, in_ch: int, out_ch: int, t_dim: int):
+    def __init__(self, in_ch, out_ch, t_dim):
         super().__init__()
         self.res1 = ResBlock(in_ch, out_ch, t_dim)
         self.res2 = ResBlock(out_ch, out_ch, t_dim)
         self.down = nn.Conv2d(out_ch, out_ch, 3, stride=2, padding=1)
 
-    def forward(self, x: torch.Tensor, t: torch.Tensor):
+    def forward(self, x, t):
         x = self.res2(self.res1(x, t), t)
-        return self.down(x), x   # downsampled, skip
+        return self.down(x), x
 
 
 class UpBlock(nn.Module):
-    def __init__(self, in_ch: int, skip_ch: int, out_ch: int, t_dim: int):
+    def __init__(self, in_ch, skip_ch, out_ch, t_dim):
         super().__init__()
         self.up   = nn.ConvTranspose2d(in_ch, in_ch, 2, stride=2)
         self.res1 = ResBlock(in_ch + skip_ch, out_ch, t_dim)
         self.res2 = ResBlock(out_ch, out_ch, t_dim)
 
-    def forward(self, x: torch.Tensor, skip: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(self, x, skip, t):
         x = torch.cat([self.up(x), skip], dim=1)
         return self.res2(self.res1(x, t), t)
 
@@ -322,20 +340,17 @@ class UNet(nn.Module):
     """
     U-Net denoiser for 64×64 images.
 
-    Encoder:   64×64 → 32×32 → 16×16
-    Bottleneck: 16×16  (optional self-attention here)
-    Decoder:   16×16 → 32×32 → 64×64
-
-    channels = [C0=64, C1=128, C2=256]
+    [v0.3] Self-attention ONLY at 16×16 bottleneck (not 32×32) — this
+    keeps memory within the 44GB GPU budget at batch_size=64 and matches
+    the Ho et al. 2020 original DDPM architecture.
     """
 
-    def __init__(self, in_ch: int = 3, channels: List[int] = None,
-                 use_attention: bool = True):
+    def __init__(self, in_ch=3, channels=None, use_attention=True):
         super().__init__()
         if channels is None:
             channels = [64, 128, 256]
         C0, C1, C2 = channels
-        t_dim = C0 * 4   # timestep embedding dimension (256)
+        t_dim = C0 * 4
 
         self.time_mlp = nn.Sequential(
             nn.Linear(C0, t_dim), nn.SiLU(), nn.Linear(t_dim, t_dim)
@@ -344,17 +359,17 @@ class UNet(nn.Module):
         self.in_conv = nn.Conv2d(in_ch, C0, 3, padding=1)
 
         # Encoder
-        self.down1 = DownBlock(C0, C1, t_dim)   # 64→32, skip (B,C1,64,64)
-        self.down2 = DownBlock(C1, C2, t_dim)   # 32→16, skip (B,C2,32,32)
+        self.down1 = DownBlock(C0, C1, t_dim)  # 64 → 32
+        self.down2 = DownBlock(C1, C2, t_dim)  # 32 → 16
 
-        # Bottleneck at 16×16
+        # Bottleneck with self-attention (16×16 — cheap: 256 tokens²)
         self.mid1 = ResBlock(C2, C2, t_dim)
-        self.mid_attn = SelfAttention(C2) if use_attention else nn.Identity()
+        self.mid_attn = SelfAttention(C2, n_heads=8) if use_attention else nn.Identity()
         self.mid2 = ResBlock(C2, C2, t_dim)
 
         # Decoder
-        self.up1 = UpBlock(C2, C2, C1, t_dim)   # 16→32
-        self.up2 = UpBlock(C1, C1, C0, t_dim)   # 32→64
+        self.up1 = UpBlock(C2, C2, C1, t_dim)  # 16 → 32
+        self.up2 = UpBlock(C1, C1, C0, t_dim)  # 32 → 64
 
         self.out_norm = nn.GroupNorm(32, C0)
         self.out_conv = nn.Conv2d(C0, in_ch, 3, padding=1)
@@ -368,19 +383,19 @@ class UNet(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
-    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    def forward(self, x, t):
         t_emb = self.time_mlp(sinusoidal_emb(t, self.time_mlp[0].in_features))
 
-        x = self.in_conv(x)                       # (B,C0,64,64)
-        x, skip1 = self.down1(x, t_emb)           # (B,C1,32,32)
-        x, skip2 = self.down2(x, t_emb)           # (B,C2,16,16)
+        x = self.in_conv(x)
+        x, skip1 = self.down1(x, t_emb)
+        x, skip2 = self.down2(x, t_emb)
 
         x = self.mid1(x, t_emb)
         x = self.mid_attn(x)
         x = self.mid2(x, t_emb)
 
-        x = self.up1(x, skip2, t_emb)             # (B,C1,32,32)
-        x = self.up2(x, skip1, t_emb)             # (B,C0,64,64)
+        x = self.up1(x, skip2, t_emb)
+        x = self.up2(x, skip1, t_emb)
 
         return self.out_conv(F.silu(self.out_norm(x)))
 
@@ -394,8 +409,6 @@ class UNet(nn.Module):
 # ──────────────────────────────────────────────────────────────
 
 class EMA:
-    """Exponential Moving Average of model weights for stable sampling."""
-
     def __init__(self, model: nn.Module, decay: float = 0.9999):
         self.decay = decay
         self.shadow = copy.deepcopy(model)
@@ -404,7 +417,7 @@ class EMA:
             p.requires_grad_(False)
 
     @torch.no_grad()
-    def update(self, model: nn.Module):
+    def update(self, model):
         for s, m in zip(self.shadow.parameters(), model.parameters()):
             s.data.mul_(self.decay).add_(m.data, alpha=1 - self.decay)
 
@@ -417,13 +430,7 @@ class EMA:
 # ──────────────────────────────────────────────────────────────
 
 @torch.no_grad()
-def ddpm_sample(model: nn.Module, sched: NoiseScheduler,
-                shape: Tuple, device: torch.device,
-                n_steps: Optional[int] = None) -> torch.Tensor:
-    """
-    DDPM ancestral sampling (Algorithm 2, Ho et al. 2020).
-    Default: n_steps = T = 1000.
-    """
+def ddpm_sample(model, sched, shape, device, n_steps=None):
     model.eval()
     B = shape[0]
     T = n_steps or sched.T
@@ -442,13 +449,7 @@ def ddpm_sample(model: nn.Module, sched: NoiseScheduler,
 
 
 @torch.no_grad()
-def ddim_sample(model: nn.Module, sched: NoiseScheduler,
-                shape: Tuple, device: torch.device,
-                n_steps: int = 50, eta: float = 0.0) -> torch.Tensor:
-    """
-    DDIM deterministic sampler (Song et al. 2020).
-    eta=0 → fully deterministic; eta=1 → DDPM-equivalent stochasticity.
-    """
+def ddim_sample(model, sched, shape, device, n_steps=50, eta=0.0):
     model.eval()
     B = shape[0]
     step_ids = torch.linspace(sched.T - 1, 0, n_steps, dtype=torch.long, device=device)
@@ -472,30 +473,16 @@ def ddim_sample(model: nn.Module, sched: NoiseScheduler,
 
 
 @torch.no_grad()
-def dpm_solver_pp_sample(model: nn.Module, sched: NoiseScheduler,
-                          shape: Tuple, device: torch.device,
-                          n_steps: int = 20) -> torch.Tensor:
-    """
-    DPM-Solver++(2M) — Algorithm 2 (Lu et al. 2022).
-
-    Uses second-order multistep updates in λ-space:
-      λ_t = log(α_t / σ_t)   where α_t = sqrt(ᾱ_t), σ_t = sqrt(1−ᾱ_t)
-
-    Update rule:
-      1st step  : x_{t+1} = (α_next/α_curr)·x_t + σ_next·(1−e^{−h})·D_curr
-      2nd+ steps: D_eff = (1+0.5/r)·D_curr − (0.5/r)·D_prev  (r = h_prev/h)
-                  x_{t+1} = (α_next/α_curr)·x_t + σ_next·(1−e^{−h})·D_eff
-    """
+def dpm_solver_pp_sample(model, sched, shape, device, n_steps=20):
+    """DPM-Solver++(2M) — Lu et al. 2022."""
     model.eval()
     B = shape[0]
 
-    # Precompute λ schedule
     ac     = sched.alphas_cumprod.to(device)
-    alpha  = ac.sqrt()                        # sqrt(ᾱ_t)
-    sigma  = (1 - ac).sqrt()                  # sqrt(1−ᾱ_t)
-    lam    = torch.log(alpha / sigma)         # λ_t
+    alpha  = ac.sqrt()
+    sigma  = (1 - ac).sqrt()
+    lam    = torch.log(alpha / sigma)
 
-    # Timestep sequence: uniform in index space (T-1 → 0)
     seq = torch.linspace(sched.T - 1, 0, n_steps + 1, dtype=torch.long, device=device)
 
     x = torch.randn(shape, device=device)
@@ -505,20 +492,18 @@ def dpm_solver_pp_sample(model: nn.Module, sched: NoiseScheduler,
         t_s, t_t = seq[i].item(), seq[i + 1].item()
         t_batch  = torch.full((B,), t_s, device=device, dtype=torch.long)
 
-        # ε-prediction → x̂0
         eps  = model(x, t_batch)
         D_curr = ((x - sigma[t_s] * eps) / alpha[t_s]).clamp(-1, 1)
 
-        h = (lam[t_t] - lam[t_s]).item()        # > 0 (moving toward clean)
+        h = (lam[t_t] - lam[t_s]).item()
 
         D_eff = D_curr
         if D_prev is not None and h_prev is not None:
             r    = h_prev / h
             D_eff = (1 + 0.5 / r) * D_curr - (0.5 / r) * D_prev
 
-        # x0-prediction form update
         coeff_x = alpha[t_t] / alpha[t_s]
-        coeff_d = sigma[t_t] * (-torch.expm1(torch.tensor(-h)))  # σ_{t+1}·(1−e^{−h})
+        coeff_d = sigma[t_t] * (-torch.expm1(torch.tensor(-h)))
         x = coeff_x * x + coeff_d * D_eff
 
         D_prev, h_prev = D_curr, h
@@ -526,9 +511,7 @@ def dpm_solver_pp_sample(model: nn.Module, sched: NoiseScheduler,
     return x.clamp(-1, 1)
 
 
-def sample(model: nn.Module, sched: NoiseScheduler, cfg: Config,
-           device: torch.device) -> torch.Tensor:
-    """Dispatch to the configured sampler."""
+def sample(model, sched, cfg, device):
     shape = (cfg.n_samples, 3, cfg.image_size, cfg.image_size)
     if cfg.sampler == "ddpm":
         return ddpm_sample(model, sched, shape, device, cfg.sample_steps)
@@ -544,34 +527,27 @@ def sample(model: nn.Module, sched: NoiseScheduler, cfg: Config,
 # 7.  FID
 # ──────────────────────────────────────────────────────────────
 
-def _get_inception(device: torch.device) -> nn.Module:
-    """Load InceptionV3 in feature-extraction mode."""
+def _get_inception(device):
     from torchvision.models import inception_v3, Inception_V3_Weights
     m = inception_v3(weights=Inception_V3_Weights.DEFAULT)
-    m.fc = nn.Identity()   # return 2048-dim pool features
+    m.fc = nn.Identity()
     m.aux_logits = False
     m.eval()
     return m.to(device)
 
 
 @torch.no_grad()
-def _extract_features(images: torch.Tensor, inception: nn.Module,
-                       device: torch.device, batch: int = 64) -> np.ndarray:
+def _extract_features(images, inception, device, batch=64):
     feats = []
     for i in range(0, len(images), batch):
         b = images[i:i + batch].to(device)
         b = F.interpolate(b, size=(299, 299), mode="bilinear", align_corners=False)
-        b = (b + 1) / 2   # [-1,1] → [0,1]
+        b = (b + 1) / 2
         feats.append(inception(b).cpu().numpy())
     return np.concatenate(feats, axis=0)
 
 
-def compute_fid(real_images: torch.Tensor, fake_images: torch.Tensor,
-                device: torch.device) -> Optional[float]:
-    """
-    Compute FID between two sets of images in [-1,1] range.
-    Returns None if scipy is not installed.
-    """
+def compute_fid(real_images, fake_images, device):
     if not SCIPY_AVAILABLE:
         return None
     inception = _get_inception(device)
@@ -595,12 +571,7 @@ def compute_fid(real_images: torch.Tensor, fake_images: torch.Tensor,
 # ──────────────────────────────────────────────────────────────
 
 def train(cfg: Config, device: torch.device) -> dict:
-    """
-    Full training run for one phase.
-    Returns a dict of logged metrics (loss curve, FID scores).
-    """
-    # ── setup ───────────────────────────────────────────────
-    out_dir = Path(cfg.log_dir) / cfg.phase_name
+    out_dir  = Path(cfg.log_dir) / cfg.phase_name
     ckpt_dir = out_dir / "checkpoints"
     img_dir  = out_dir / "samples"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -617,10 +588,11 @@ def train(cfg: Config, device: torch.device) -> dict:
     )
     log = logging.getLogger(cfg.phase_name)
     log.info(f"Phase: {cfg.phase_name}")
+    log.info(f"Training on REAL face data: {cfg.data_dirs}")
     log.info(json.dumps(asdict(cfg), indent=2))
 
     # ── data ────────────────────────────────────────────────
-    train_loader, val_loader = build_dataloaders(cfg)
+    train_loader, val_loader, val_set = build_dataloaders(cfg)
     log.info(f"Train batches: {len(train_loader)} | Val batches: {len(val_loader)}")
 
     # ── model ───────────────────────────────────────────────
@@ -631,21 +603,21 @@ def train(cfg: Config, device: torch.device) -> dict:
     log.info(f"Model parameters: {model.param_count:,}")
     log.info(f"Schedule: {cfg.schedule} | Attention: {cfg.use_attention}")
 
-    # ── optimiser & scaler ──────────────────────────────────
-    optim  = torch.optim.Adam(model.parameters(), lr=cfg.lr)
+    # ── optimiser, scheduler & scaler ──────────────────────
+    optim = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optim, T_max=cfg.epochs, eta_min=cfg.lr_min
+    )
     scaler = GradScaler(enabled=cfg.use_fp16)
 
-    # ── metrics storage ─────────────────────────────────────
     history = {
         "phase": cfg.phase_name,
         "train_loss": [], "val_loss": [],
         "fid": {}, "sample_time_1000": None, "sample_time_fast": None
     }
 
-    # Collect val images once for FID reference
     real_fid_imgs: Optional[torch.Tensor] = None
 
-    # ── training ─────────────────────────────────────────────
     for epoch in range(1, cfg.epochs + 1):
         model.train()
         ep_loss, n_batches = 0.0, 0
@@ -691,7 +663,9 @@ def train(cfg: Config, device: torch.device) -> dict:
         val_loss = v_loss / v_batches
         history["val_loss"].append(val_loss)
 
-        log.info(f"Epoch {epoch:03d} | train_loss={train_loss:.4f}  val_loss={val_loss:.4f}")
+        lr_scheduler.step()
+        current_lr = lr_scheduler.get_last_lr()[0]
+        log.info(f"Epoch {epoch:03d} | train_loss={train_loss:.4f}  val_loss={val_loss:.4f}  lr={current_lr:.2e}")
 
         # ── sample grid ────────────────────────────────────
         if epoch % cfg.sample_every == 0 or epoch == cfg.epochs:
@@ -700,20 +674,17 @@ def train(cfg: Config, device: torch.device) -> dict:
             save_image(grid, img_dir / f"epoch_{epoch:04d}.png")
             log.info(f"Saved sample grid → {img_dir / f'epoch_{epoch:04d}.png'}")
 
-            # FID at final epoch and every sample_every epochs
             if SCIPY_AVAILABLE:
+                # [v0.3] FID reference = held-out val images (real faces)
                 if real_fid_imgs is None:
-                    # Load REAL wiki images as FID reference
-                    real_dataset = FakeFaceDataset([str(REAL_DIR)], cfg.image_size, augment=False)
-                    real_loader_fid = DataLoader(real_dataset, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers)
                     real_list = []
-                    for xr in real_loader_fid:
+                    for xr in val_loader:
                         real_list.append(xr)
                         if sum(r.size(0) for r in real_list) >= cfg.fid_n_samples:
                             break
                     real_fid_imgs = torch.cat(real_list, dim=0)[:cfg.fid_n_samples]
+                    log.info(f"FID reference: {real_fid_imgs.size(0)} held-out real images")
 
-                # Generate cfg.fid_n_samples fake images
                 fake_list = []
                 with torch.no_grad():
                     while sum(f.size(0) for f in fake_list) < cfg.fid_n_samples:
@@ -725,13 +696,13 @@ def train(cfg: Config, device: torch.device) -> dict:
                 history["fid"][epoch] = fid
                 log.info(f"FID @ epoch {epoch}: {fid:.2f}")
 
-        # ── checkpoint ─────────────────────────────────────
         if epoch % cfg.checkpoint_every == 0 or epoch == cfg.epochs:
             ckpt = {
                 "epoch":      epoch,
                 "model":      model.state_dict(),
                 "ema":        ema.state_dict(),
                 "optim":      optim.state_dict(),
+                "scheduler":  lr_scheduler.state_dict(),
                 "config":     asdict(cfg),
             }
             torch.save(ckpt, ckpt_dir / f"ckpt_epoch_{epoch:04d}.pt")
@@ -751,7 +722,6 @@ def train(cfg: Config, device: torch.device) -> dict:
     log.info(f"DPM-Solver++ 20 steps: {history['sample_time_fast']:.1f}s")
     log.info(f"Speedup: {history['sample_time_1000']/history['sample_time_fast']:.1f}×")
 
-    # ── save history ───────────────────────────────────────
     with open(out_dir / "history.json", "w") as f:
         json.dump(history, f, indent=2)
 
@@ -760,10 +730,10 @@ def train(cfg: Config, device: torch.device) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────
-# 9.  PLOTTING (loss curves + FID comparison)
+# 9.  PLOTTING
 # ──────────────────────────────────────────────────────────────
 
-def plot_results(all_histories: List[dict], out_dir: str = "./ddpm_runs"):
+def plot_results(all_histories: List[dict], out_dir: str):
     try:
         import matplotlib.pyplot as plt
     except ImportError:
@@ -780,7 +750,6 @@ def plot_results(all_histories: List[dict], out_dir: str = "./ddpm_runs"):
     axes[0].set_xlabel("Epoch"); axes[0].set_ylabel("MSE Loss")
     axes[0].set_title("Training & Validation Loss"); axes[0].legend(fontsize=7)
 
-    # FID bar chart (final epoch)
     phase_names, fid_vals = [], []
     for h in all_histories:
         if h["fid"]:
@@ -794,10 +763,13 @@ def plot_results(all_histories: List[dict], out_dir: str = "./ddpm_runs"):
         for i, v in enumerate(fid_vals):
             axes[1].text(i, v + 0.5, f"{v:.1f}", ha="center", fontsize=9)
 
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = out / f"phase_comparison_{ts}.png"
     plt.tight_layout()
-    plt.savefig(out / "phase_comparison.png", dpi=150)
+    plt.savefig(out_path, dpi=150)
     plt.close()
-    print(f"Saved comparison plot → {out / 'phase_comparison.png'}")
+    print(f"Saved comparison plot → {out_path}")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -805,13 +777,12 @@ def plot_results(all_histories: List[dict], out_dir: str = "./ddpm_runs"):
 # ──────────────────────────────────────────────────────────────
 
 def parse_args():
-    p = argparse.ArgumentParser(description="DDPM pipeline — DFF fake faces")
+    p = argparse.ArgumentParser(description="DDPM pipeline v0.3 — trained on REAL faces")
     p.add_argument("--phase",   default="1",
-                   help="1 | 2 | 3 | 4 | all  (default: 1)")
-    p.add_argument("--epochs",  type=int, default=None,
-                   help="Override number of epochs (e.g. 5 for quick test)")
+                   help="1 | 2 | 3 | 4 | all | range like 2-4 | list like 2,3,4")
+    p.add_argument("--epochs",  type=int, default=None, help="Override epochs")
     p.add_argument("--batch",   type=int, default=None, help="Override batch size")
-    p.add_argument("--log_dir", default="./ddpm_runs", help="Output directory")
+    p.add_argument("--log_dir", default="./ddpm_runs_v03", help="Output directory")
     p.add_argument("--no_fp16", action="store_true", help="Disable mixed precision")
     return p.parse_args()
 
@@ -827,18 +798,28 @@ def main():
     print(f"Device: {device}")
 
     overrides = {"log_dir": args.log_dir}
-    if args.epochs  is not None: overrides["epochs"]     = args.epochs
-    if args.batch   is not None: overrides["batch_size"] = args.batch
-    if args.no_fp16:              overrides["use_fp16"]  = False
+    if args.epochs is not None: overrides["epochs"]     = args.epochs
+    if args.batch  is not None: overrides["batch_size"] = args.batch
+    if args.no_fp16:             overrides["use_fp16"]  = False
 
-    phases = [1, 2, 3, 4] if args.phase == "all" else [int(args.phase)]
+    if args.phase == "all":
+        phases = [1, 2, 3, 4]
+    elif "-" in args.phase:
+        start, end = args.phase.split("-")
+        phases = list(range(int(start), int(end) + 1))
+    elif "," in args.phase:
+        phases = [int(p) for p in args.phase.split(",")]
+    else:
+        phases = [int(args.phase)]
+
     all_histories = []
-
     for ph in phases:
         cfg = get_phase_config(ph, **overrides)
         print(f"\n{'='*60}")
-        print(f"  Phase {ph}: {cfg.phase_name}")
+        print(f"  Phase {ph}: {cfg.phase_name}  [v0.3 — real-face training]")
         print(f"  attention={cfg.use_attention}  schedule={cfg.schedule}  sampler={cfg.sampler}({cfg.sample_steps})")
+        print(f"  optimizer=AdamW(wd={cfg.weight_decay})  lr={cfg.lr}→{cfg.lr_min} (cosine)")
+        print(f"  train data: {cfg.data_dirs}")
         print(f"{'='*60}\n")
         h = train(cfg, device)
         all_histories.append(h)
@@ -846,7 +827,6 @@ def main():
     if len(all_histories) > 1:
         plot_results(all_histories, args.log_dir)
 
-    # Print summary table
     print("\n" + "=" * 60)
     print(f"{'Phase':<30}  {'Final FID':>10}  {'1000-step(s)':>12}  {'20-step(s)':>10}")
     print("-" * 60)
