@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import random
 
@@ -19,13 +20,14 @@ EPOCHS = 5
 LR = 0.0002
 BETA1 = 0.5
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+
+PROJECT_DIR = Path(__file__).resolve().parent #.parent
 FAKE_DIRS = [
     PROJECT_DIR.parent / "inpainting",
     PROJECT_DIR.parent / "insight",
     PROJECT_DIR.parent / "text2img",
 ]
-OUTPUT_DIR = PROJECT_DIR / "Image_Generation" / "dcgan_outputs"
+OUTPUT_DIR = BASE_DIR / "Image_Generation" / "dcgan_outputs"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
