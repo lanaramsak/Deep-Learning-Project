@@ -16,7 +16,7 @@ SEED = 42
 BATCH_SIZE = 64
 IMAGE_SIZE = 64
 LATENT_DIM = 100
-EPOCHS = 5
+EPOCHS = 20
 LR = 0.0002
 BETA1 = 0.5
 
@@ -27,7 +27,7 @@ FAKE_DIRS = [
     PROJECT_DIR.parent / "insight",
     PROJECT_DIR.parent / "text2img",
 ]
-OUTPUT_DIR = BASE_DIR / "Image_Generation" / "dcgan_outputs"
+OUTPUT_DIR = PROJECT_DIR / "Image_Generation" / "dcgan_outputs"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
