@@ -12,6 +12,14 @@ DEFAULT_SEED = 42
 N_SAMPLES_PER_CLASS = 500
 
 
+def resolve_data_dir(name):
+    candidates = [SCRIPT_DIR / name, SCRIPT_DIR.parent / name]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
 class PathLabelDataset(Dataset):
     def __init__(self, paths, labels, transform=None):
         self.paths = paths
@@ -51,16 +59,29 @@ def filter_valid_images(paths, labels):
 
 
 def get_sample_paths(n=N_SAMPLES_PER_CLASS, seed=DEFAULT_SEED):
-    paths_real = collect_paths(SCRIPT_DIR.parent / "wiki")
+    paths_real = collect_paths(resolve_data_dir("wiki"))
     paths_fake = (
-        collect_paths(SCRIPT_DIR.parent / "inpainting") +
-        collect_paths(SCRIPT_DIR.parent / "insight") +
-        collect_paths(SCRIPT_DIR.parent / "text2img")
+        collect_paths(resolve_data_dir("inpainting")) +
+        collect_paths(resolve_data_dir("insight")) +
+        collect_paths(resolve_data_dir("text2img"))
     )
 
+    if not paths_real or not paths_fake:
+        raise ValueError(
+            "Could not build sample set. "
+            f"Found {len(paths_real)} real images and {len(paths_fake)} fake images."
+        )
+
+    sample_size = min(n, len(paths_real), len(paths_fake))
+    if sample_size < n:
+        print(
+            f"Requested {n} samples per class, but only {sample_size} are available. "
+            "Using the maximum balanced subset instead."
+        )
+
     rng = random.Random(seed)
-    paths_small = rng.sample(paths_real, n) + rng.sample(paths_fake, n)
-    y_small = [0] * n + [1] * n
+    paths_small = rng.sample(paths_real, sample_size) + rng.sample(paths_fake, sample_size)
+    y_small = [0] * sample_size + [1] * sample_size
     return filter_valid_images(paths_small, y_small)
 
 

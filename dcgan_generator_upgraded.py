@@ -36,7 +36,7 @@ OUTPUT_ROOT = PROJECT_DIR / "Image_Generation"
 
 
 def get_output_dir(epochs):
-    return OUTPUT_ROOT / f"epochs_{epochs}" / "dcgan_outputs"
+    return OUTPUT_ROOT / f"upgrade_epochs_{epochs}" / "dcgan_outputs"
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -59,7 +59,8 @@ class FakeImageDataset(Dataset):
             raise ValueError("No fake images found.")
 
         self.transform = transforms.Compose([
-            transforms.Resize((image_size, image_size)),
+            transforms.Resize(image_size + 8),
+            transforms.CenterCrop(image_size),
             transforms.ToTensor(),
             transforms.Normalize(
                 mean=[0.5, 0.5, 0.5],
