@@ -3,7 +3,8 @@
 #SBATCH --output=dcgan.%j.out
 #SBATCH --error=dcgan.%j.err
 #SBATCH --time=24:00:00
-#SBATCH --partition=gpu
+#SBATCH --partition=normal
+#SBATCH --qos=gpu_batch
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=4
