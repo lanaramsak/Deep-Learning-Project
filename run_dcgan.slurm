@@ -15,8 +15,8 @@
 
 cd /home/up202512959/Deep-Learning-Project
 source .venv/bin/activate
-python dcgan_generator_upgraded.py --epochs 20
-# python dcgan_generator.py --epochs 5
-# python dcgan_generator.py --epochs 20
-# python dcgan_generator.py --epochs 50
-# python two_branch_ablation.py
+# python dcgan_generator_upgraded.py --epochs 20
+python dcgan_generator.py --epochs 5
+python dcgan_generator.py --epochs 20
+python dcgan_generator.py --epochs 50
+python two_branch_ablation.py
