@@ -10,6 +10,7 @@ from torchvision.utils import save_image, make_grid
 from PIL import Image
 
 import matplotlib.pyplot as plt
+import argparse
 
 
 SEED = 42
@@ -27,7 +28,10 @@ FAKE_DIRS = [
     PROJECT_DIR / "insight",
     PROJECT_DIR / "text2img",
 ]
-OUTPUT_DIR = PROJECT_DIR / "Image_Generation" / "dcgan_outputs"
+OUTPUT_ROOT = PROJECT_DIR / "Image_Generation"
+
+def get_output_dir(epochs):
+    return OUTPUT_ROOT / f"epochs_{epochs}" / "dcgan_outputs"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -227,12 +231,28 @@ def train_one_epoch():
     return avg_loss_D, avg_loss_G, preview_images
 
 
-# train_one_epoch()
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train DCGAN generator/discriminator")
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=EPOCHS,
+        help=f"Number of training epochs (default: {EPOCHS})",
+    )
+    return parser.parse_args()
 
-for epoch in range(1, EPOCHS + 1):
-    loss_D, loss_G, preview_images = train_one_epoch()
 
-    print(f"Epoch [{epoch}/{EPOCHS}] | loss_D: {loss_D:.4f} | loss_G: {loss_G:.4f}")
+def main(epochs):
+    output_dir = get_output_dir(epochs)
+    for epoch in range(1, epochs + 1):
+        loss_D, loss_G, preview_images = train_one_epoch()
 
-    save_generated_images(preview_images, epoch, OUTPUT_DIR, n=8)
+        print(f"Epoch [{epoch}/{epochs}] | loss_D: {loss_D:.4f} | loss_G: {loss_G:.4f}")
+
+        save_generated_images(preview_images, epoch, output_dir, n=8)
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    main(args.epochs)
 

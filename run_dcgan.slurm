@@ -2,7 +2,7 @@
 #SBATCH --job-name=dcgan
 #SBATCH --output=dcgan.%j.out
 #SBATCH --error=dcgan.%j.err
-#SBATCH --time=04:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16G
@@ -14,4 +14,7 @@
 
 cd /home/up202512959/Deep-Learning-Project
 source .venv/bin/activate
-python Image_Generation/dcgan_generator.py
+python Image_Generation/dcgan_generator.py --epochs 5
+python Image_Generation/dcgan_generator.py --epochs 20
+python Image_Generation/dcgan_generator.py --epochs 50
+python two_branch_ablation.py
