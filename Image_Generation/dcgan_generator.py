@@ -16,12 +16,12 @@ SEED = 42
 BATCH_SIZE = 64
 IMAGE_SIZE = 64
 LATENT_DIM = 100
-EPOCHS = 20
+EPOCHS = 10
 LR = 0.0002
 BETA1 = 0.5
 
 
-PROJECT_DIR = Path(__file__).resolve().parent #.parent
+PROJECT_DIR = Path(__file__).resolve().parent.parent
 FAKE_DIRS = [
     PROJECT_DIR.parent / "inpainting",
     PROJECT_DIR.parent / "insight",
@@ -168,7 +168,7 @@ def save_generated_images(images, epoch, output_dir, n=8):
     grid = make_grid(images, nrow=n)
     save_image(grid, output_dir / f"epoch_{epoch:03d}.png")
 
-save_generated_images(generated_images, epoch=0, output_dir=OUTPUT_DIR)
+# save_generated_images(generated_images, epoch=0, output_dir=OUTPUT_DIR)
 
 fixed_noise = torch.randn(8, LATENT_DIM, 1, 1, device=device)
 

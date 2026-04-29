@@ -1,6 +1,6 @@
 # Two-branch ResNet18 model for binary image classification.
 # One branch processes the original image, while the second branch
-# processes a blurred version of the same image. Features from both
+# processes a transformed version of the same image. Features from both
 # branches are concatenated and passed to a final classifier.
 # This allows the model to learn from two complementary views of
 # the same input in an end-to-end fine-tuning setup.
@@ -28,7 +28,7 @@ class TwoBranchPathLabelDataset(Dataset):
 
     Each sample is read only once from disk, then converted into:
     1. the original image tensor
-    2. a blurred version of the same image tensor
+    2. a transformed version of the same image tensor
     3. the class label
 
     This keeps the dataset aligned with the rest of the repository:
@@ -36,14 +36,41 @@ class TwoBranchPathLabelDataset(Dataset):
     the same image collection utilities used elsewhere in the project.
     """
 
-    def __init__(self, paths, labels, image_size=224, blur_radius=2.0):
+    def __init__(
+        self,
+        paths,
+        labels,
+        image_size=224,
+        second_view_type="blur",
+        blur_radius=2.0,
+        rotation_degrees=10.0,
+    ):
         self.paths = paths
         self.labels = labels
+        self.second_view_type = second_view_type
         self.blur_radius = blur_radius
+        self.rotation_degrees = rotation_degrees
 
         # We reuse the repository's standard ImageNet-style preprocessing
         # so the new model stays compatible with pretrained ResNet weights.
         self.transform = build_transform(image_size=image_size)
+
+    def _build_second_view(self, image):
+        if self.second_view_type == "identity":
+            return image.copy()
+
+        if self.second_view_type == "blur":
+            return image.filter(ImageFilter.GaussianBlur(radius=self.blur_radius))
+
+        if self.second_view_type == "rotation":
+            return image.rotate(
+                self.rotation_degrees,
+                resample=Image.Resampling.BILINEAR,
+                expand=False,
+                fillcolor=(0, 0, 0),
+            )
+
+        raise ValueError(f"Unsupported second_view_type: {self.second_view_type}")
 
     def __len__(self):
         return len(self.paths)
@@ -55,19 +82,21 @@ class TwoBranchPathLabelDataset(Dataset):
         # Branch 1 receives the standard image.
         original_tensor = self.transform(image)
 
-        # Branch 2 receives a blurred version of the same image
-        blurred_image = image.filter(ImageFilter.GaussianBlur(radius=self.blur_radius))
-        blurred_tensor = self.transform(blurred_image)
+        # Branch 2 receives an alternate view of the same image.
+        second_view_image = self._build_second_view(image)
+        second_view_tensor = self.transform(second_view_image)
 
         label = torch.tensor(self.labels[idx], dtype=torch.long)
-        return original_tensor, blurred_tensor, label
+        return original_tensor, second_view_tensor, label
 
 
 def create_two_branch_dataloaders(
     paths=None,
     labels=None,
     image_size=224,
+    second_view_type="blur",
     blur_radius=2.0,
+    rotation_degrees=10.0,
     batch_size=32,
     test_size=0.2,
     random_state=42,
@@ -95,13 +124,17 @@ def create_two_branch_dataloaders(
         train_paths,
         train_labels,
         image_size=image_size,
+        second_view_type=second_view_type,
         blur_radius=blur_radius,
+        rotation_degrees=rotation_degrees,
     )
     val_dataset = TwoBranchPathLabelDataset(
         val_paths,
         val_labels,
         image_size=image_size,
+        second_view_type=second_view_type,
         blur_radius=blur_radius,
+        rotation_degrees=rotation_degrees,
     )
 
     train_loader = DataLoader(
@@ -358,7 +391,9 @@ def fit_two_stage_model(
 
 def build_default_two_branch_setup(
     image_size=224,
+    second_view_type="blur",
     blur_radius=2.0,
+    rotation_degrees=10.0,
     batch_size=32,
     test_size=0.2,
     random_state=42,
@@ -380,7 +415,9 @@ def build_default_two_branch_setup(
         paths=DEFAULT_PATHS_SMALL,
         labels=DEFAULT_Y_SMALL,
         image_size=image_size,
+        second_view_type=second_view_type,
         blur_radius=blur_radius,
+        rotation_degrees=rotation_degrees,
         batch_size=batch_size,
         test_size=test_size,
         random_state=random_state,
