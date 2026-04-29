@@ -21,11 +21,11 @@ LR = 0.0002
 BETA1 = 0.5
 
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
+PROJECT_DIR = Path(__file__).resolve().parent #.parent
 FAKE_DIRS = [
-    PROJECT_DIR.parent / "inpainting",
-    PROJECT_DIR.parent / "insight",
-    PROJECT_DIR.parent / "text2img",
+    PROJECT_DIR / "inpainting",
+    PROJECT_DIR / "insight",
+    PROJECT_DIR / "text2img",
 ]
 OUTPUT_DIR = PROJECT_DIR / "Image_Generation" / "dcgan_outputs"
 
