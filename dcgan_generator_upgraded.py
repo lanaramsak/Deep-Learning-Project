@@ -6,6 +6,10 @@
 # - Output directory is still organized by epoch count
 # - Maintains the same training loop style as the original script
 
+# More changes
+# - different learning rates for generator and discriminator (discriminator is trained more conservatively)
+# - features_d 128 -> 64 to reduce model capacity and encourage more stable training 
+
 import random
 from pathlib import Path
 
@@ -115,7 +119,7 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, channels=3, features_d=128):
+    def __init__(self, channels=3, features_d=64):
         super().__init__()
         self.net = nn.Sequential(
             spectral_norm(nn.Conv2d(channels, features_d, 4, 2, 1, bias=False)),
@@ -148,8 +152,8 @@ discriminator = Discriminator().to(device)
 discriminator.apply(weights_init)
 
 criterion = nn.BCELoss()
-optimizerD = torch.optim.Adam(discriminator.parameters(), lr=LR, betas=(BETA1, 0.999))
-optimizerG = torch.optim.Adam(generator.parameters(), lr=LR, betas=(BETA1, 0.999))
+optimizerD = torch.optim.Adam(discriminator.parameters(), lr=0.0001, betas=(BETA1, 0.999))
+optimizerG = torch.optim.Adam(generator.parameters(), lr=0.0002, betas=(BETA1, 0.999))
 
 
 def save_generated_images(images, epoch, output_dir, n=8):
