@@ -18,7 +18,7 @@ from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-SCRIPT_DIR = Path(__file__).resolve()
+SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "results" / "two_branch_ablation"
 
 

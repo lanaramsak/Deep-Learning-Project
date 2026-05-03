@@ -65,6 +65,7 @@ class FakeImageDataset(Dataset):
         self.transform = transforms.Compose([
             transforms.Resize(image_size + 8),
             transforms.CenterCrop(image_size),
+            transforms.RandomHorizontalFlip(p=0.5),
             transforms.ToTensor(),
             transforms.Normalize(
                 mean=[0.5, 0.5, 0.5],
@@ -126,19 +127,19 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
 
             spectral_norm(nn.Conv2d(features_d, features_d * 2, 4, 2, 1, bias=False)),
-            nn.BatchNorm2d(features_d * 2),
+            # nn.BatchNorm2d(features_d * 2),
             nn.LeakyReLU(0.2, inplace=True),
 
             spectral_norm(nn.Conv2d(features_d * 2, features_d * 4, 4, 2, 1, bias=False)),
-            nn.BatchNorm2d(features_d * 4),
+            # nn.BatchNorm2d(features_d * 4),
             nn.LeakyReLU(0.2, inplace=True),
 
             spectral_norm(nn.Conv2d(features_d * 4, features_d * 8, 4, 2, 1, bias=False)),
-            nn.BatchNorm2d(features_d * 8),
+            # nn.BatchNorm2d(features_d * 8),
             nn.LeakyReLU(0.2, inplace=True),
 
             spectral_norm(nn.Conv2d(features_d * 8, 1, 4, 1, 0, bias=False)),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
         )
 
     def forward(self, x):
@@ -151,8 +152,9 @@ generator.apply(weights_init)
 discriminator = Discriminator().to(device)
 discriminator.apply(weights_init)
 
-criterion = nn.BCELoss()
-optimizerD = torch.optim.Adam(discriminator.parameters(), lr=0.0001, betas=(BETA1, 0.999))
+# criterion = nn.BCELoss()
+criterion = nn.BCEWithLogitsLoss()
+optimizerD = torch.optim.Adam(discriminator.parameters(), lr=0.00005, betas=(BETA1, 0.999))
 optimizerG = torch.optim.Adam(generator.parameters(), lr=0.0002, betas=(BETA1, 0.999))
 
 
