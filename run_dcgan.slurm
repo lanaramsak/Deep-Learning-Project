@@ -3,7 +3,7 @@
 #SBATCH --output=dcgan.%j.out
 #SBATCH --error=dcgan.%j.err
 #SBATCH --time=12:00:00
-#SBATCH --partition=normal
+#SBATCH --partition=fast
 #SBATCH --qos=gpu_batch
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16G
