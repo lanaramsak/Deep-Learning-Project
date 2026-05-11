@@ -70,6 +70,15 @@ class TwoBranchPathLabelDataset(Dataset):
                 fillcolor=(0, 0, 0),
             )
 
+        if self.second_view_type == "rotation_blur":
+            rotated = image.rotate(
+                self.rotation_degrees,
+                resample=Image.Resampling.BILINEAR,
+                expand=False,
+                fillcolor=(0, 0, 0),
+            )
+            return rotated.filter(ImageFilter.GaussianBlur(radius=self.blur_radius))
+
         raise ValueError(f"Unsupported second_view_type: {self.second_view_type}")
 
     def __len__(self):
