@@ -3,7 +3,7 @@
 #SBATCH --output=vit.%j.out
 #SBATCH --error=vit.%j.err
 #SBATCH --time=12:00:00
-#SBATCH --partition=fast
+#SBATCH --partition=normal
 #SBATCH --qos=gpu_batch
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16G
