@@ -1,6 +1,12 @@
+"""
+DATA IMPORT AND LOADER:
+
+This module handles the collection of image paths, filtering out invalid images, and creating PyTorch Datasets and DataLoaders for training and testing. 
+It ensures that we have a balanced dataset of real and fake images, and applies necessary transformations to prepare the data for model training.
+"""
+
 from pathlib import Path
 import random
-
 import torch
 from PIL import Image, UnidentifiedImageError
 from torch.utils.data import DataLoader, Dataset
@@ -11,7 +17,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_SEED = 42
 N_SAMPLES_PER_CLASS = 500
 
-
+# Function to resolve data directory paths, checking both the current and parent directories for the specified name
 def resolve_data_dir(name):
     candidates = [SCRIPT_DIR / name, SCRIPT_DIR.parent / name]
     for candidate in candidates:
@@ -19,7 +25,7 @@ def resolve_data_dir(name):
             return candidate
     return candidates[0]
 
-
+# Dataset class to load images from paths and return them with their corresponding labels
 class PathLabelDataset(Dataset):
     def __init__(self, paths, labels, transform=None):
         self.paths = paths
@@ -36,12 +42,12 @@ class PathLabelDataset(Dataset):
         label = torch.tensor(self.labels[idx], dtype=torch.long)
         return img, label
 
-
+# Function to collect image paths with specific extensions from a directory
 def collect_paths(root, exts={".jpg", ".jpeg", ".png"}):
     root = Path(root)
     return [p for p in root.rglob("*") if p.suffix.lower() in exts]
 
-
+# Function to filter out invalid images from the collected paths and labels
 def filter_valid_images(paths, labels):
     valid_paths = []
     valid_labels = []
@@ -57,7 +63,7 @@ def filter_valid_images(paths, labels):
 
     return valid_paths, valid_labels
 
-
+# Function to get sample paths and labels, ensuring a balanced dataset of real and fake images
 def get_sample_paths(n=N_SAMPLES_PER_CLASS, seed=DEFAULT_SEED):
     paths_real = collect_paths(resolve_data_dir("wiki"))
     paths_fake = (
@@ -87,7 +93,7 @@ def get_sample_paths(n=N_SAMPLES_PER_CLASS, seed=DEFAULT_SEED):
 
 DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL = get_sample_paths()
 
-
+# Function to build a transformation pipeline for image preprocessing, including resizing, normalization, and conversion to tensor
 def build_transform(image_size=224):
     return transforms.Compose([
         transforms.Resize((image_size, image_size)),
@@ -98,7 +104,7 @@ def build_transform(image_size=224):
         )
     ])
 
-
+# Function to create a DataLoader from given paths and labels, applying necessary transformations
 def get_loader(
     paths=None,
     labels=None,

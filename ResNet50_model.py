@@ -1,3 +1,11 @@
+"""RESNET-50 MODEL TRAINING AND EVALUATION:
+
+ResNet-50 is trained on the data. It replaces the head with a custom binary classifier and fine-tunes in two phases:
+
+Phase 1: backbone frozen, only the new head trains
+Phase 2: deeper backbone layers unfrozen, full fine-tuning
+"""
+
 import torch
 import torch.nn as nn
 from torchvision import models
@@ -10,27 +18,28 @@ from torch.utils.data import random_split
 from import_data import get_sample_paths, PathLabelDataset, build_transform
 
 random.seed(42)
-N_SAMPLES_PER_CLASS = 500
+N_SAMPLES_PER_CLASS = 1000
 
+# Get DataLoaders for training and testing: This function collects image paths and labels, creates a dataset, splits it into training and testing sets, and returns two separate DataLoaders.
 def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=32, train_split=0.8):
-    # 1. Collect and filter all sample paths
+    # Collect and filter all sample paths
     paths, labels = get_sample_paths(n=n)
     
-    # 2. Create the full dataset
+    # Create the full dataset
     full_dataset = PathLabelDataset(paths, labels, transform=build_transform(224))
 
-    # 3. Calculate lengths for split
+    # Calculate lengths for split
     train_len = int(len(full_dataset) * train_split)
     test_len = len(full_dataset) - train_len
 
-    # 4. Perform the random split
+    # Perform the random split
     train_ds, test_ds = random_split(
         full_dataset, 
         [train_len, test_len],
         generator=torch.Generator().manual_seed(42)
     )
 
-    # 5. Create two separate loaders
+    # Create two separate loaders
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
 
@@ -43,6 +52,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 def get_trained_ResNet50_model(train_loader, device):
     model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
 
+    # Check if the classifier has 'in_features' attribute to determine the number of input features for the new head
     if hasattr(model.fc, 'in_features'):
         num_ftrs = model.fc.in_features
     else:
@@ -62,7 +72,7 @@ def get_trained_ResNet50_model(train_loader, device):
         param.requires_grad = False
 
     for param in model.fc.parameters():
-        param.requires_grad = True
+        param.requires_grad = True # Unfreeze the new head
 
     model = model.to(device)
 
@@ -77,10 +87,13 @@ def get_trained_ResNet50_model(train_loader, device):
         for epoch in range(epochs):
             running_loss = 0.0
             for images, labels in loader:
+                # 'loader' provides (images, labels) from your PathLabelDataset
                 images, labels = images.to(device), labels.to(device).float().view(-1, 1)
                 
-                optimizer.zero_grad()
+                optimizer.zero_grad() # Clear gradients before backpropagation
                 outputs = model(images)
+
+                # Backward pass and optimization step (uses the gradients to update the model's parameters)
                 loss = criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
@@ -98,8 +111,7 @@ def get_trained_ResNet50_model(train_loader, device):
             for param in child.parameters():
                 param.requires_grad = True
 
-    # Use a MUCH smaller learning rate for fine-tuning the backbone
-    # You don't want to "break" the pre-trained weights, just nudge them.
+    # Use a smaller learning rate for fine-tuning the backbone
     optimizer = torch.optim.Adam(model.parameters(), lr=0.00001)
 
     # Phase 2: Fine-tune the deeper layers + the head
@@ -109,6 +121,7 @@ def get_trained_ResNet50_model(train_loader, device):
 
 # model = get_trained_ResNet50_model(train_loader, device)
 
+# EVALUATION ON TEST SET
 def evaluate_resnet50_model(model, loader, device):
     model.eval()
     all_labels = []
