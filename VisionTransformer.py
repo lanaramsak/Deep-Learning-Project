@@ -24,7 +24,7 @@ from import_data import DEFAULT_SEED, PathLabelDataset, get_sample_paths
 
 
 random.seed(DEFAULT_SEED)
-N_SAMPLES_PER_CLASS = 500
+N_SAMPLES_PER_CLASS = 5000
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_EPOCHS = 5
 SCRIPT_DIR = Path(__file__).resolve().parent

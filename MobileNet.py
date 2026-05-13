@@ -43,7 +43,7 @@ def extract_features_MobileNet(paths=None, labels=None):
     return X_feat_mobile, y_np_mobile
 
 # Extract features and labels using MobileNetV2
-X_feat_mobile, y_np_mobile = extract_features_MobileNet(DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL)
+# X_feat_mobile, y_np_mobile = extract_features_MobileNet(DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL)
 
 # SPLITTING INTO TRAIN/TEST
 def extract_subsets_MobileNet(X_feat = X_feat_mobile, y_np = y_np_mobile, test_size=0.2, random_state=42):
