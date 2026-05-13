@@ -1,0 +1,167 @@
+Experiment: original_only
+Second view: identity
+Blur radius: 0.0
+Rotation degrees: 0.0
+Accuracy: 0.5300
+F1: 0.5000
+AUC: 0.5276
+EER: 0.4900
+Confusion matrix:
+[[59 41]
+ [53 47]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.5268    0.5900    0.5566       100
+           1     0.5341    0.4700    0.5000       100
+
+    accuracy                         0.5300       200
+   macro avg     0.5304    0.5300    0.5283       200
+weighted avg     0.5304    0.5300    0.5283       200
+
+
+========================================================================
+
+Experiment: blur_1.0
+Second view: blur
+Blur radius: 1.0
+Rotation degrees: 0.0
+Accuracy: 0.5350
+F1: 0.6517
+AUC: 0.6095
+EER: 0.4000
+Confusion matrix:
+[[20 80]
+ [13 87]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.6061    0.2000    0.3008       100
+           1     0.5210    0.8700    0.6517       100
+
+    accuracy                         0.5350       200
+   macro avg     0.5635    0.5350    0.4762       200
+weighted avg     0.5635    0.5350    0.4762       200
+
+
+========================================================================
+
+Experiment: blur_2.0
+Second view: blur
+Blur radius: 2.0
+Rotation degrees: 0.0
+Accuracy: 0.6050
+F1: 0.6326
+AUC: 0.6627
+EER: 0.3700
+Confusion matrix:
+[[53 47]
+ [32 68]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.6235    0.5300    0.5730       100
+           1     0.5913    0.6800    0.6326       100
+
+    accuracy                         0.6050       200
+   macro avg     0.6074    0.6050    0.6028       200
+weighted avg     0.6074    0.6050    0.6028       200
+
+
+========================================================================
+
+Experiment: blur_3.0
+Second view: blur
+Blur radius: 3.0
+Rotation degrees: 0.0
+Accuracy: 0.5150
+F1: 0.0583
+AUC: 0.5842
+EER: 0.4500
+Confusion matrix:
+[[100   0]
+ [ 97   3]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.5076    1.0000    0.6734       100
+           1     1.0000    0.0300    0.0583       100
+
+    accuracy                         0.5150       200
+   macro avg     0.7538    0.5150    0.3658       200
+weighted avg     0.7538    0.5150    0.3658       200
+
+
+========================================================================
+
+Experiment: rotation_5
+Second view: rotation
+Blur radius: 0.0
+Rotation degrees: 5.0
+Accuracy: 0.5300
+F1: 0.6803
+AUC: 0.7413
+EER: 0.3200
+Confusion matrix:
+[[  6  94]
+ [  0 100]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     1.0000    0.0600    0.1132       100
+           1     0.5155    1.0000    0.6803       100
+
+    accuracy                         0.5300       200
+   macro avg     0.7577    0.5300    0.3967       200
+weighted avg     0.7577    0.5300    0.3967       200
+
+
+========================================================================
+
+Experiment: rotation_10
+Second view: rotation
+Blur radius: 0.0
+Rotation degrees: 10.0
+Accuracy: 0.6650
+F1: 0.7452
+AUC: 0.8363
+EER: 0.2200
+Confusion matrix:
+[[35 65]
+ [ 2 98]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.9459    0.3500    0.5109       100
+           1     0.6012    0.9800    0.7452       100
+
+    accuracy                         0.6650       200
+   macro avg     0.7736    0.6650    0.6281       200
+weighted avg     0.7736    0.6650    0.6281       200
+
+
+========================================================================
+
+Experiment: rotation_15
+Second view: rotation
+Blur radius: 0.0
+Rotation degrees: 15.0
+Accuracy: 0.8450
+F1: 0.8558
+AUC: 0.9151
+EER: 0.1600
+Confusion matrix:
+[[77 23]
+ [ 8 92]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.9059    0.7700    0.8324       100
+           1     0.8000    0.9200    0.8558       100
+
+    accuracy                         0.8450       200
+   macro avg     0.8529    0.8450    0.8441       200
+weighted avg     0.8529    0.8450    0.8441       200
+
+
+========================================================================

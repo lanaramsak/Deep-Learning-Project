@@ -1,0 +1,3 @@
+label,second_view_type,blur_radius,rotation_degrees,accuracy,f1,auc,eer,best_phase,best_epoch,best_val_acc,best_val_f1,best_val_auc,best_checkpoint_path
+rotation_10_blur_2.0,rotation_blur,2.0,10.0,0.675,0.7389558232931727,0.8575,0.19999999999805756,fine_tuning,4,0.675,0.7389558232931727,0.8575,/Users/lanar/Documents/Magisterij/ISRM_1/Deep and Reinforcement learning/Deep-Learning-Project/results/two_branch_combo/rotation_10_blur_2.0_best.pt
+rotation_15_blur_2.0,rotation_blur,2.0,15.0,0.64,0.7333333333333333,0.9009,0.19999999999999962,fine_tuning,3,0.64,0.7333333333333333,0.9009,/Users/lanar/Documents/Magisterij/ISRM_1/Deep and Reinforcement learning/Deep-Learning-Project/results/two_branch_combo/rotation_15_blur_2.0_best.pt

@@ -72,8 +72,8 @@ def cnn_predict_fn(model, images):
 
 
 def vit_predict_fn(model, images):
-    outputs = model(pixel_values=images)
-    return torch.softmax(outputs.logits, dim=1)[:, 1]
+    logits = model(images)
+    return torch.softmax(logits, dim=1)[:, 1]
 
 
 def two_branch_predict_fn(model, x_original, x_second_view):

@@ -1,0 +1,279 @@
+Epoch finished | loss_D: 1.3673 | loss_G: 0.7223
+Epoch [1/50] | loss_D: 1.3673 | loss_G: 0.7223
+Epoch finished | loss_D: 1.3841 | loss_G: 0.6961
+Epoch [2/50] | loss_D: 1.3841 | loss_G: 0.6961
+Epoch finished | loss_D: 1.3834 | loss_G: 0.6983
+Epoch [3/50] | loss_D: 1.3834 | loss_G: 0.6983
+Epoch finished | loss_D: 1.3848 | loss_G: 0.6979
+Epoch [4/50] | loss_D: 1.3848 | loss_G: 0.6979
+Epoch finished | loss_D: 1.3459 | loss_G: 0.7650
+Epoch [5/50] | loss_D: 1.3459 | loss_G: 0.7650
+Epoch finished | loss_D: 1.3172 | loss_G: 0.7617
+Epoch [6/50] | loss_D: 1.3172 | loss_G: 0.7617
+Epoch finished | loss_D: 1.3086 | loss_G: 0.7452
+Epoch [7/50] | loss_D: 1.3086 | loss_G: 0.7452
+Epoch finished | loss_D: 1.3514 | loss_G: 0.7058
+Epoch [8/50] | loss_D: 1.3514 | loss_G: 0.7058
+Epoch finished | loss_D: 1.3393 | loss_G: 0.7232
+Epoch [9/50] | loss_D: 1.3393 | loss_G: 0.7232
+Epoch finished | loss_D: 1.3258 | loss_G: 0.7205
+Epoch [10/50] | loss_D: 1.3258 | loss_G: 0.7205
+Epoch finished | loss_D: 1.3231 | loss_G: 0.7201
+Epoch [11/50] | loss_D: 1.3231 | loss_G: 0.7201
+Epoch finished | loss_D: 1.3502 | loss_G: 0.7064
+Epoch [12/50] | loss_D: 1.3502 | loss_G: 0.7064
+Epoch finished | loss_D: 1.3595 | loss_G: 0.7041
+Epoch [13/50] | loss_D: 1.3595 | loss_G: 0.7041
+Epoch finished | loss_D: 1.3583 | loss_G: 0.7059
+Epoch [14/50] | loss_D: 1.3583 | loss_G: 0.7059
+Epoch finished | loss_D: 1.3586 | loss_G: 0.7054
+Epoch [15/50] | loss_D: 1.3586 | loss_G: 0.7054
+Epoch finished | loss_D: 1.3596 | loss_G: 0.7048
+Epoch [16/50] | loss_D: 1.3596 | loss_G: 0.7048
+Epoch finished | loss_D: 1.3586 | loss_G: 0.7080
+Epoch [17/50] | loss_D: 1.3586 | loss_G: 0.7080
+Epoch finished | loss_D: 1.3577 | loss_G: 0.7061
+Epoch [18/50] | loss_D: 1.3577 | loss_G: 0.7061
+Epoch finished | loss_D: 1.3583 | loss_G: 0.7045
+Epoch [19/50] | loss_D: 1.3583 | loss_G: 0.7045
+Epoch finished | loss_D: 1.3607 | loss_G: 0.7028
+Epoch [20/50] | loss_D: 1.3607 | loss_G: 0.7028
+Epoch finished | loss_D: 1.3626 | loss_G: 0.7025
+Epoch [21/50] | loss_D: 1.3626 | loss_G: 0.7025
+Epoch finished | loss_D: 1.3625 | loss_G: 0.7021
+Epoch [22/50] | loss_D: 1.3625 | loss_G: 0.7021
+Epoch finished | loss_D: 1.3632 | loss_G: 0.7017
+Epoch [23/50] | loss_D: 1.3632 | loss_G: 0.7017
+Epoch finished | loss_D: 1.3649 | loss_G: 0.7015
+Epoch [24/50] | loss_D: 1.3649 | loss_G: 0.7015
+Epoch finished | loss_D: 1.3649 | loss_G: 0.7009
+Epoch [25/50] | loss_D: 1.3649 | loss_G: 0.7009
+Epoch finished | loss_D: 1.3658 | loss_G: 0.7005
+Epoch [26/50] | loss_D: 1.3658 | loss_G: 0.7005
+Epoch finished | loss_D: 1.3670 | loss_G: 0.6999
+Epoch [27/50] | loss_D: 1.3670 | loss_G: 0.6999
+Epoch finished | loss_D: 1.3674 | loss_G: 0.7009
+Epoch [28/50] | loss_D: 1.3674 | loss_G: 0.7009
+Epoch finished | loss_D: 1.3677 | loss_G: 0.6995
+Epoch [29/50] | loss_D: 1.3677 | loss_G: 0.6995
+Epoch finished | loss_D: 1.3679 | loss_G: 0.7008
+Epoch [30/50] | loss_D: 1.3679 | loss_G: 0.7008
+Epoch finished | loss_D: 1.3680 | loss_G: 0.7002
+Epoch [31/50] | loss_D: 1.3680 | loss_G: 0.7002
+Epoch finished | loss_D: 1.3682 | loss_G: 0.7001
+Epoch [32/50] | loss_D: 1.3682 | loss_G: 0.7001
+Epoch finished | loss_D: 1.3683 | loss_G: 0.7006
+Epoch [33/50] | loss_D: 1.3683 | loss_G: 0.7006
+Epoch finished | loss_D: 1.3681 | loss_G: 0.7002
+Epoch [34/50] | loss_D: 1.3681 | loss_G: 0.7002
+Epoch finished | loss_D: 1.3683 | loss_G: 0.7008
+Epoch [35/50] | loss_D: 1.3683 | loss_G: 0.7008
+Epoch finished | loss_D: 1.3686 | loss_G: 0.6999
+Epoch [36/50] | loss_D: 1.3686 | loss_G: 0.6999
+Epoch finished | loss_D: 1.3687 | loss_G: 0.7007
+Epoch [37/50] | loss_D: 1.3687 | loss_G: 0.7007
+Epoch finished | loss_D: 1.3688 | loss_G: 0.7004
+Epoch [38/50] | loss_D: 1.3688 | loss_G: 0.7004
+Epoch finished | loss_D: 1.3679 | loss_G: 0.7002
+Epoch [39/50] | loss_D: 1.3679 | loss_G: 0.7002
+Epoch finished | loss_D: 1.3677 | loss_G: 0.7007
+Epoch [40/50] | loss_D: 1.3677 | loss_G: 0.7007
+Epoch finished | loss_D: 1.3677 | loss_G: 0.7012
+Epoch [41/50] | loss_D: 1.3677 | loss_G: 0.7012
+Epoch finished | loss_D: 1.3676 | loss_G: 0.7004
+Epoch [42/50] | loss_D: 1.3676 | loss_G: 0.7004
+Epoch finished | loss_D: 1.3670 | loss_G: 0.7008
+Epoch [43/50] | loss_D: 1.3670 | loss_G: 0.7008
+Epoch finished | loss_D: 1.3666 | loss_G: 0.7010
+Epoch [44/50] | loss_D: 1.3666 | loss_G: 0.7010
+Epoch finished | loss_D: 1.3667 | loss_G: 0.7008
+Epoch [45/50] | loss_D: 1.3667 | loss_G: 0.7008
+Epoch finished | loss_D: 1.3671 | loss_G: 0.7010
+Epoch [46/50] | loss_D: 1.3671 | loss_G: 0.7010
+Epoch finished | loss_D: 1.3662 | loss_G: 0.7008
+Epoch [47/50] | loss_D: 1.3662 | loss_G: 0.7008
+Epoch finished | loss_D: 1.3658 | loss_G: 0.7011
+Epoch [48/50] | loss_D: 1.3658 | loss_G: 0.7011
+Epoch finished | loss_D: 1.3656 | loss_G: 0.7013
+Epoch [49/50] | loss_D: 1.3656 | loss_G: 0.7013
+Epoch finished | loss_D: 1.3649 | loss_G: 0.7017
+Epoch [50/50] | loss_D: 1.3649 | loss_G: 0.7017
+Running on device: cuda
+Dataset size: 1000 images
+
+Running experiment: original_only
+Experiment: original_only
+Second view: identity
+Blur radius: 0.0
+Rotation degrees: 0.0
+Accuracy: 0.5300
+F1: 0.5000
+AUC: 0.5276
+EER: 0.4900
+Confusion matrix:
+[[59 41]
+ [53 47]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.5268    0.5900    0.5566       100
+           1     0.5341    0.4700    0.5000       100
+
+    accuracy                         0.5300       200
+   macro avg     0.5304    0.5300    0.5283       200
+weighted avg     0.5304    0.5300    0.5283       200
+
+
+Running experiment: blur_1.0
+Experiment: blur_1.0
+Second view: blur
+Blur radius: 1.0
+Rotation degrees: 0.0
+Accuracy: 0.5350
+F1: 0.6517
+AUC: 0.6095
+EER: 0.4000
+Confusion matrix:
+[[20 80]
+ [13 87]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.6061    0.2000    0.3008       100
+           1     0.5210    0.8700    0.6517       100
+
+    accuracy                         0.5350       200
+   macro avg     0.5635    0.5350    0.4762       200
+weighted avg     0.5635    0.5350    0.4762       200
+
+
+Running experiment: blur_2.0
+Experiment: blur_2.0
+Second view: blur
+Blur radius: 2.0
+Rotation degrees: 0.0
+Accuracy: 0.6050
+F1: 0.6326
+AUC: 0.6627
+EER: 0.3700
+Confusion matrix:
+[[53 47]
+ [32 68]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.6235    0.5300    0.5730       100
+           1     0.5913    0.6800    0.6326       100
+
+    accuracy                         0.6050       200
+   macro avg     0.6074    0.6050    0.6028       200
+weighted avg     0.6074    0.6050    0.6028       200
+
+
+Running experiment: blur_3.0
+Experiment: blur_3.0
+Second view: blur
+Blur radius: 3.0
+Rotation degrees: 0.0
+Accuracy: 0.5150
+F1: 0.0583
+AUC: 0.5842
+EER: 0.4500
+Confusion matrix:
+[[100   0]
+ [ 97   3]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.5076    1.0000    0.6734       100
+           1     1.0000    0.0300    0.0583       100
+
+    accuracy                         0.5150       200
+   macro avg     0.7538    0.5150    0.3658       200
+weighted avg     0.7538    0.5150    0.3658       200
+
+
+Running experiment: rotation_5
+Experiment: rotation_5
+Second view: rotation
+Blur radius: 0.0
+Rotation degrees: 5.0
+Accuracy: 0.5300
+F1: 0.6803
+AUC: 0.7413
+EER: 0.3200
+Confusion matrix:
+[[  6  94]
+ [  0 100]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     1.0000    0.0600    0.1132       100
+           1     0.5155    1.0000    0.6803       100
+
+    accuracy                         0.5300       200
+   macro avg     0.7577    0.5300    0.3967       200
+weighted avg     0.7577    0.5300    0.3967       200
+
+
+Running experiment: rotation_10
+Experiment: rotation_10
+Second view: rotation
+Blur radius: 0.0
+Rotation degrees: 10.0
+Accuracy: 0.6650
+F1: 0.7452
+AUC: 0.8363
+EER: 0.2200
+Confusion matrix:
+[[35 65]
+ [ 2 98]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.9459    0.3500    0.5109       100
+           1     0.6012    0.9800    0.7452       100
+
+    accuracy                         0.6650       200
+   macro avg     0.7736    0.6650    0.6281       200
+weighted avg     0.7736    0.6650    0.6281       200
+
+
+Running experiment: rotation_15
+Experiment: rotation_15
+Second view: rotation
+Blur radius: 0.0
+Rotation degrees: 15.0
+Accuracy: 0.8450
+F1: 0.8558
+AUC: 0.9151
+EER: 0.1600
+Confusion matrix:
+[[77 23]
+ [ 8 92]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.9059    0.7700    0.8324       100
+           1     0.8000    0.9200    0.8558       100
+
+    accuracy                         0.8450       200
+   macro avg     0.8529    0.8450    0.8441       200
+weighted avg     0.8529    0.8450    0.8441       200
+
+
+Summary
+Experiment                Acc       F1      AUC      EER
+--------------------------------------------------------
+rotation_15            0.8450   0.8558   0.9151   0.1600
+rotation_10            0.6650   0.7452   0.8363   0.2200
+rotation_5             0.5300   0.6803   0.7413   0.3200
+blur_2.0               0.6050   0.6326   0.6627   0.3700
+blur_1.0               0.5350   0.6517   0.6095   0.4000
+blur_3.0               0.5150   0.0583   0.5842   0.4500
+original_only          0.5300   0.5000   0.5276   0.4900
+
+Saved summary CSV to: /home/up202512959/Deep-Learning-Project/results/two_branch_ablation/summary_metrics.csv
+Saved detailed report to: /home/up202512959/Deep-Learning-Project/results/two_branch_ablation/detailed_report.txt
+Saved metric comparison plot to: /home/up202512959/Deep-Learning-Project/results/two_branch_ablation/metric_comparison.png
+Saved training curves plot to: /home/up202512959/Deep-Learning-Project/results/two_branch_ablation/training_curves.png

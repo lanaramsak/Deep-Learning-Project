@@ -1,0 +1,59 @@
+Experiment: rotation_10_blur_2.0
+Second view: rotation_blur
+Blur radius: 2.0
+Rotation degrees: 10.0
+Best checkpoint: /Users/lanar/Documents/Magisterij/ISRM_1/Deep and Reinforcement learning/Deep-Learning-Project/results/two_branch_combo/rotation_10_blur_2.0_best.pt
+Best epoch phase: fine_tuning
+Best epoch number: 4
+Best val_acc: 0.6750
+Best val_f1: 0.7390
+Best val_auc: 0.8575
+Final accuracy: 0.6750
+Final F1: 0.7390
+Final AUC: 0.8575
+Final EER: 0.2000
+Confusion matrix:
+[[43 57]
+ [ 8 92]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.8431    0.4300    0.5695       100
+           1     0.6174    0.9200    0.7390       100
+
+    accuracy                         0.6750       200
+   macro avg     0.7303    0.6750    0.6542       200
+weighted avg     0.7303    0.6750    0.6542       200
+
+
+========================================================================
+
+Experiment: rotation_15_blur_2.0
+Second view: rotation_blur
+Blur radius: 2.0
+Rotation degrees: 15.0
+Best checkpoint: /Users/lanar/Documents/Magisterij/ISRM_1/Deep and Reinforcement learning/Deep-Learning-Project/results/two_branch_combo/rotation_15_blur_2.0_best.pt
+Best epoch phase: fine_tuning
+Best epoch number: 3
+Best val_acc: 0.6400
+Best val_f1: 0.7333
+Best val_auc: 0.9009
+Final accuracy: 0.6400
+Final F1: 0.7333
+Final AUC: 0.9009
+Final EER: 0.2000
+Confusion matrix:
+[[29 71]
+ [ 1 99]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.9667    0.2900    0.4462       100
+           1     0.5824    0.9900    0.7333       100
+
+    accuracy                         0.6400       200
+   macro avg     0.7745    0.6400    0.5897       200
+weighted avg     0.7745    0.6400    0.5897       200
+
+
+========================================================================

@@ -7,6 +7,7 @@ import random
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.nn as nn
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -14,48 +15,49 @@ from sklearn.metrics import (
     roc_auc_score,
     roc_curve,
 )
-from torch.utils.data import DataLoader, random_split
-from torchvision import transforms
-from transformers import ViTForImageClassification, ViTImageProcessor
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
+from torchvision import models
 
 from evaluation_metrics import get_eer_score, get_f1_score
-from import_data import PathLabelDataset, get_sample_paths
+from import_data import DEFAULT_SEED, PathLabelDataset, get_sample_paths
 
 
-random.seed(42)
-N_SAMPLES_PER_CLASS = 2000
+random.seed(DEFAULT_SEED)
+N_SAMPLES_PER_CLASS = 500
 DEFAULT_BATCH_SIZE = 32
 DEFAULT_EPOCHS = 5
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "results" / "vit_experiment"
 
-model_name = "google/vit-base-patch16-224-in21k"
-processor = ViTImageProcessor.from_pretrained(model_name)
-
-vit_transform = transforms.Compose(
-    [
-        transforms.Resize((processor.size["height"], processor.size["width"])),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=processor.image_mean, std=processor.image_std),
-    ]
-)
+VIT_WEIGHTS = models.ViT_B_16_Weights.DEFAULT
+vit_transform = VIT_WEIGHTS.transforms()
 
 
 def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=DEFAULT_BATCH_SIZE, train_split=0.8):
     paths, labels = get_sample_paths(n=n)
-    full_dataset = PathLabelDataset(paths, labels, transform=vit_transform)
-
-    train_len = int(len(full_dataset) * train_split)
-    test_len = len(full_dataset) - train_len
-    train_ds, test_ds = random_split(
-        full_dataset,
-        [train_len, test_len],
-        generator=torch.Generator().manual_seed(42),
+    train_paths, test_paths, train_labels, test_labels = train_test_split(
+        paths,
+        labels,
+        train_size=train_split,
+        random_state=DEFAULT_SEED,
+        stratify=labels,
+        shuffle=True,
     )
 
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
+    train_dataset = PathLabelDataset(train_paths, train_labels, transform=vit_transform)
+    test_dataset = PathLabelDataset(test_paths, test_labels, transform=vit_transform)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     return train_loader, test_loader
+
+
+def build_vit_model(num_classes=2):
+    model = models.vit_b_16(weights=VIT_WEIGHTS)
+    in_features = model.heads.head.in_features
+    model.heads.head = nn.Linear(in_features, num_classes)
+    return model
 
 
 @torch.no_grad()
@@ -67,8 +69,7 @@ def evaluate_vit_model(model, loader, device, return_dict=False):
 
     for images, labels in loader:
         images = images.to(device)
-        outputs = model(pixel_values=images)
-        logits = outputs.logits
+        logits = model(images)
         probs = torch.softmax(logits, dim=1)[:, 1]
         preds = torch.argmax(logits, dim=1)
 
@@ -107,14 +108,9 @@ def evaluate_vit_model(model, loader, device, return_dict=False):
 
 
 def get_trained_ViT_model(train_loader, device, epochs=DEFAULT_EPOCHS, val_loader=None, output_dir=None):
-    model = ViTForImageClassification.from_pretrained(
-        model_name,
-        num_labels=2,
-        id2label={0: "Real", 1: "Fake"},
-        label2id={"Real": 0, "Fake": 1},
-    )
-    model.to(device)
+    model = build_vit_model(num_classes=2).to(device)
 
+    criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-5, weight_decay=0.01)
     history = []
     best_state = None
@@ -129,8 +125,8 @@ def get_trained_ViT_model(train_loader, device, epochs=DEFAULT_EPOCHS, val_loade
             labels = labels.to(device)
 
             optimizer.zero_grad()
-            outputs = model(pixel_values=images, labels=labels)
-            loss = outputs.loss
+            logits = model(images)
+            loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()

@@ -9,13 +9,21 @@ import torch
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score
 
 from evaluation_metrics import get_eer_score, get_f1_score
-from TwoBranchResNet18 import (
-    TwoBranchResNet18,
-    create_two_branch_dataloaders,
-    fit_two_stage_model,
-)
 from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL
 
+# We can decide which model to choose for experiments
+
+# from TwoBranchResNet18 import (
+#     TwoBranchResNet18 as TwoBranchModel,
+#     create_two_branch_dataloaders,
+#     fit_two_stage_model,
+# )
+
+from TwoBranchVisionTransformer import (
+    TwoBranchVisionTransformer as TwoBranchModel,
+    create_two_branch_dataloaders,  
+    fit_two_stage_model,
+)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -67,16 +75,10 @@ def get_experiments(include_rotation=True):
         make_experiment("blur_1.0", "blur", blur_radius=1.0),
         make_experiment("blur_2.0", "blur", blur_radius=2.0),
         make_experiment("blur_3.0", "blur", blur_radius=3.0),
+        make_experiment("rotation_5", "rotation", rotation_degrees=5.0),
+        make_experiment("rotation_10", "rotation", rotation_degrees=10.0),
+        make_experiment("rotation_15", "rotation", rotation_degrees=15.0)
     ]
-
-    if include_rotation:
-        experiments.extend(
-            [
-                make_experiment("rotation_5", "rotation", rotation_degrees=5.0),
-                make_experiment("rotation_10", "rotation", rotation_degrees=10.0),
-                make_experiment("rotation_15", "rotation", rotation_degrees=15.0),
-            ]
-        )
 
     return experiments
 
@@ -95,7 +97,7 @@ def run_single_experiment(experiment):
         num_workers=0,
     )
 
-    model = TwoBranchResNet18(
+    model = TwoBranchModel(
         num_classes=2,
         pretrained=False,  # Keep ablations comparable and focused on the second-view effect.
         dropout=0.3,
@@ -148,7 +150,7 @@ def format_result(result):
 
 
 def save_metrics_csv(results, output_dir):
-    output_path = output_dir / "summary_metrics.csv"
+    output_path = output_dir / "summary_metrics_visiontransformer.csv"
     fieldnames = [
         "label",
         "second_view_type",
@@ -170,7 +172,7 @@ def save_metrics_csv(results, output_dir):
 
 
 def save_detailed_report(results, output_dir):
-    output_path = output_dir / "detailed_report.txt"
+    output_path = output_dir / "detailed_report_visiontransformer.txt"
     sections = []
     for result in results:
         sections.append(format_result(result))
@@ -199,7 +201,7 @@ def plot_metric_bars(results, output_dir):
 
     fig.suptitle("Two-Branch View Ablation Metrics")
     fig.tight_layout()
-    output_path = output_dir / "metric_comparison.png"
+    output_path = output_dir / "metric_comparison_visiontransformer.png"
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return output_path
@@ -227,7 +229,7 @@ def plot_training_curves(results, output_dir):
 
     axes[1].legend(loc="lower right")
     fig.tight_layout()
-    output_path = output_dir / "training_curves.png"
+    output_path = output_dir / "training_curves_visiontransformer.png"
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return output_path

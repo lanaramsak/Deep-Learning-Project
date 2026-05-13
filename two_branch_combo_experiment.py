@@ -17,6 +17,7 @@ from TwoBranchResNet18 import (
     train_one_epoch,
     unfreeze_last_resnet_block,
 )
+#- to vision transformer
 from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL
 
 

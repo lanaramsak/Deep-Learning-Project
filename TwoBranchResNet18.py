@@ -1,12 +1,12 @@
-# Two-branch ResNet18 model for binary image classification.
-# One branch processes the original image, while the second branch
-# processes a transformed version of the same image. Features from both
-# branches are concatenated and passed to a final classifier.
-# This allows the model to learn from two complementary views of
-# the same input in an end-to-end fine-tuning setup.
+"""
+Two-branch ResNet18 model for binary image classification.
+One branch processes the original image, while the second branch processes a transformed version of the same image. 
+Features from both branches are concatenated and passed to a final classifier.
+This allows the model to learn from two complementary views of
+the same input in an end-to-end fine-tuning setup.
+"""
 
 from pathlib import Path
-
 import torch
 import torch.nn as nn
 from PIL import Image, ImageFilter
@@ -14,7 +14,6 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from torchvision import models
 from tqdm import tqdm
-
 
 from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL, build_transform
 
