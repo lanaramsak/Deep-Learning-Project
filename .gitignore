@@ -13,3 +13,5 @@ Icon?
 __pycache__/
 
 .claude
+# checkpoints
+*.pt

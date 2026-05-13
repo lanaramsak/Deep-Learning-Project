@@ -1,3 +1,20 @@
+"""
+VISION TRANSFORMER TRAINING AND EVALUATION
+
+This module provides a standalone Vision Transformer (ViT) pipeline for the
+binary real-vs-fake image classification task used in this project.
+
+The file serves two purposes:
+1. It can be imported as a helper module by other scripts, such as ensemble
+   experiments.
+2. It can be executed directly to run a full ViT experiment end-to-end:
+   data loading, training, evaluation, checkpoint saving, and plotting.
+
+Unlike the earlier Hugging Face-based ViT version, this implementation uses
+`torchvision.models.vit_b_16`, which keeps it compatible with the current
+PyTorch environment used in the repository. - 2.2.2
+"""
+
 from argparse import ArgumentParser
 import copy
 import csv
@@ -30,11 +47,26 @@ DEFAULT_EPOCHS = 5
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "results" / "vit_experiment"
 
+# Use the default pretrained torchvision ViT weights.
+# We also reuse the matching preprocessing transform so the input pipeline
+# stays aligned with how the model was originally trained.
 VIT_WEIGHTS = models.ViT_B_16_Weights.DEFAULT
 vit_transform = VIT_WEIGHTS.transforms()
 
 
 def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=DEFAULT_BATCH_SIZE, train_split=0.8):
+    """
+    Build train/test DataLoaders for the ViT experiment.
+
+    `n` is the number of samples per class, not the total number of images.
+    For example, `n=500` means:
+    - 500 real images
+    - 500 fake images
+    - 1000 total images
+
+    A stratified split is used so the train/test sets preserve class balance.
+    """
+
     paths, labels = get_sample_paths(n=n)
     train_paths, test_paths, train_labels, test_labels = train_test_split(
         paths,
@@ -54,6 +86,13 @@ def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=DEFAULT_BATCH_SIZE, train_spli
 
 
 def build_vit_model(num_classes=2):
+    """
+    Create the ViT model used in this project.
+
+    The pretrained backbone is kept, but the classification head is replaced
+    with a new linear layer for binary classification.
+    """
+
     model = models.vit_b_16(weights=VIT_WEIGHTS)
     in_features = model.heads.head.in_features
     model.heads.head = nn.Linear(in_features, num_classes)
@@ -62,6 +101,21 @@ def build_vit_model(num_classes=2):
 
 @torch.no_grad()
 def evaluate_vit_model(model, loader, device, return_dict=False):
+    """
+    Evaluate the ViT model on a validation/test loader.
+
+    The function computes:
+    - accuracy
+    - F1
+    - ROC-AUC
+    - EER
+    - confusion matrix
+    - classification report
+
+    When `return_dict=True`, the raw arrays are also returned so downstream
+    code can make plots such as the ROC curve.
+    """
+
     model.eval()
     all_labels = []
     all_probs = []
@@ -69,7 +123,11 @@ def evaluate_vit_model(model, loader, device, return_dict=False):
 
     for images, labels in loader:
         images = images.to(device)
+
+        # ViT outputs raw logits for the two classes.
         logits = model(images)
+
+        # Convert logits to class probabilities and hard predictions.
         probs = torch.softmax(logits, dim=1)[:, 1]
         preds = torch.argmax(logits, dim=1)
 
@@ -108,6 +166,18 @@ def evaluate_vit_model(model, loader, device, return_dict=False):
 
 
 def get_trained_ViT_model(train_loader, device, epochs=DEFAULT_EPOCHS, val_loader=None, output_dir=None):
+    """
+    Train the ViT model and optionally track validation performance.
+
+    If a validation loader is provided, the function:
+    - evaluates after each epoch
+    - keeps the best checkpoint based on validation AUC
+    - stores a simple epoch-by-epoch history on the returned model
+
+    This function is intentionally reusable so it can be imported by
+    ensemble scripts as well as used in standalone runs.
+    """
+
     model = build_vit_model(num_classes=2).to(device)
 
     criterion = nn.CrossEntropyLoss()
@@ -131,10 +201,13 @@ def get_trained_ViT_model(train_loader, device, epochs=DEFAULT_EPOCHS, val_loade
             optimizer.step()
             total_loss += loss.item()
 
+        # Store the average training loss for this epoch.
         avg_train_loss = total_loss / len(train_loader)
         epoch_record = {"epoch": epoch, "train_loss": avg_train_loss}
 
         if val_loader is not None:
+            # Evaluate after each epoch so we can monitor the model and keep
+            # the best checkpoint instead of blindly taking the final epoch.
             val_result = evaluate_vit_model(model, val_loader, device, return_dict=True)
             epoch_record.update(
                 {
@@ -145,6 +218,9 @@ def get_trained_ViT_model(train_loader, device, epochs=DEFAULT_EPOCHS, val_loade
                 }
             )
 
+            # Validation AUC is used as the checkpoint-selection metric because
+            # it is threshold-independent and usually more informative than
+            # raw accuracy for imbalanced or uncertain classification settings.
             if val_result["auc"] > best_auc:
                 best_auc = val_result["auc"]
                 best_state = copy.deepcopy(model.state_dict())
@@ -168,6 +244,8 @@ def get_trained_ViT_model(train_loader, device, epochs=DEFAULT_EPOCHS, val_loade
 
         history.append(epoch_record)
 
+    # If validation-based checkpointing was active, restore the best weights
+    # before returning the model.
     if best_state is not None:
         model.load_state_dict(best_state)
 
@@ -176,6 +254,10 @@ def get_trained_ViT_model(train_loader, device, epochs=DEFAULT_EPOCHS, val_loade
 
 
 def save_metrics(result, output_dir):
+    """
+    Save the final summary metrics to CSV.
+    """
+
     output_path = output_dir / "summary_metrics.csv"
     with output_path.open("w", newline="") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=["accuracy", "f1", "auc", "eer"])
@@ -192,6 +274,10 @@ def save_metrics(result, output_dir):
 
 
 def save_report(result, output_dir):
+    """
+    Save an evaluation report to a text file.
+    """
+
     output_path = output_dir / "detailed_report.txt"
     text = (
         f"Accuracy: {result['accuracy']:.4f}\n"
@@ -206,6 +292,13 @@ def save_report(result, output_dir):
 
 
 def plot_training_curves(history, output_dir):
+    """
+    Plot the main training/validation curves collected during training.
+
+    The left subplot shows training loss and validation AUC.
+    The right subplot shows validation accuracy and validation F1.
+    """
+
     if not history:
         return None
 
@@ -235,6 +328,12 @@ def plot_training_curves(history, output_dir):
 
 
 def plot_evaluation(result, output_dir):
+    """
+    Plot two final evaluation views:
+    - confusion matrix
+    - ROC curve
+    """
+
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     cm = result["confusion_matrix"]
@@ -262,31 +361,49 @@ def plot_evaluation(result, output_dir):
     return output_path
 
 
-def parse_args():
-    parser = ArgumentParser(description="Run a standalone Vision Transformer experiment.")
-    parser.add_argument(
-        "--n",
-        type=int,
-        default=N_SAMPLES_PER_CLASS,
-        help="Number of samples per class. n=500 means 1000 total images.",
-    )
-    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-    return parser.parse_args()
+# def parse_args():
+#     """
+#     Parse CLI arguments for standalone ViT runs.
+#     """
+
+#     parser = ArgumentParser(description="Run a standalone Vision Transformer experiment.")
+#     parser.add_argument(
+#         "--n",
+#         type=int,
+#         default=N_SAMPLES_PER_CLASS,
+#         help="Number of samples per class. n=500 means 1000 total images.",
+#     )
+#     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+#     parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
+#     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+#     return parser.parse_args()
 
 
 def main():
-    args = parse_args()
-    output_dir = args.output_dir
+    """
+    Run the full standalone ViT experiment.
+
+    This function:
+    1. creates the output directory
+    2. builds train/test loaders
+    3. trains the model
+    4. evaluates the best checkpoint
+    5. saves metrics, report, and plots
+    """
+
+    # args = parse_args()
+    # output_dir = args.output_dir
+    output_dir = Path("output")  # Default output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_loader, test_loader = get_loaders(n=args.n, batch_size=args.batch_size)
+    # train_loader, test_loader = get_loaders(n=args.n, batch_size=args.batch_size)
+    train_loader, test_loader = get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=DEFAULT_BATCH_SIZE)
     model = get_trained_ViT_model(
         train_loader,
         device,
-        epochs=args.epochs,
+        # epochs=args.epochs,
+        epochs=DEFAULT_EPOCHS,
         val_loader=test_loader,
         output_dir=output_dir,
     )
