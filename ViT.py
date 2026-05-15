@@ -18,7 +18,7 @@ from evaluation_metrics import get_classification_report, get_f1_score, get_auc_
 from import_data import get_sample_paths, PathLabelDataset
 
 random.seed(42)
-N_SAMPLES_PER_CLASS = 5000
+N_SAMPLES_PER_CLASS = 2000
 
 # Initialize model and processor
 model_name = "google/vit-base-patch16-224-in21k" # pretrained model

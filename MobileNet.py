@@ -13,13 +13,17 @@ from torchvision import models
 import numpy as np
 from sklearn.model_selection import train_test_split
 from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL, get_loader
+from MobileNet_model import get_trained_MobileNet_model, get_loaders
 
 # MobileNetV2 Feature Extraction setup
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 mobilenet = models.mobilenet_v2(weights=models.MobileNet_V2_Weights.DEFAULT) # pretrained model
+train_loader, test_loader = get_loaders()
+# mobilenet = get_trained_MobileNet_model(train_loader, device) # Get the trained MobileNetV2 model (with frozen backbone and new head)
 mobilenet.classifier = nn.Identity() # This replaces the final classification layer with an identity function, so we get raw features instead of class scores
 mobilenet.eval()
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
 mobilenet.to(device)
 
 # Function to extract features using MobileNetV2
@@ -43,7 +47,7 @@ def extract_features_MobileNet(paths=None, labels=None):
     return X_feat_mobile, y_np_mobile
 
 # Extract features and labels using MobileNetV2
-# X_feat_mobile, y_np_mobile = extract_features_MobileNet(DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL)
+X_feat_mobile, y_np_mobile = extract_features_MobileNet(DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL)
 
 # SPLITTING INTO TRAIN/TEST
 def extract_subsets_MobileNet(X_feat = X_feat_mobile, y_np = y_np_mobile, test_size=0.2, random_state=42):

@@ -15,7 +15,7 @@ from torchvision import transforms
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_SEED = 42
-N_SAMPLES_PER_CLASS = 5000
+N_SAMPLES_PER_CLASS = 2000
 
 # Function to resolve data directory paths, checking both the current and parent directories for the specified name
 def resolve_data_dir(name):

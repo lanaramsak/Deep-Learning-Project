@@ -1,6 +1,5 @@
+import numpy as np
 from sklearn.metrics import classification_report, f1_score, roc_auc_score, roc_curve
-from scipy.optimize import brentq
-from scipy.interpolate import interp1d
 
 """
 Evaluation Metrics for Binary Classification (Fake vs Real Images) using sklearn library:
@@ -30,5 +29,17 @@ def get_auc_score(y_test, y_probs):
 
 # The point where False Positive Rate and False Negative Rate are equal. Lower is better (0.0 is a perfect model).
 def get_eer_score(y_test, y_probs):
-    fpr, tpr, thresholds = roc_curve(y_test, y_probs)
-    return brentq(lambda x : 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
+    y_test = np.asarray(y_test)
+    y_probs = np.asarray(y_probs, dtype=float)
+
+    # Drop any non-finite probabilities (NaN/inf from unstable model outputs) so roc_curve stays valid
+    mask = np.isfinite(y_probs)
+    if not mask.all():
+        y_test = y_test[mask]
+        y_probs = y_probs[mask]
+
+    fpr, tpr, _ = roc_curve(y_test, y_probs)
+    fnr = 1.0 - tpr
+    # EER is where FPR crosses FNR; pick the point where they're closest and average them.
+    idx = np.nanargmin(np.abs(fnr - fpr))
+    return float((fpr[idx] + fnr[idx]) / 2.0)

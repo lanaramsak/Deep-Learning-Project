@@ -12,13 +12,17 @@ from torchvision import models
 import numpy as np
 from sklearn.model_selection import train_test_split
 from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL, get_loader
+from ResNet50_model import get_trained_ResNet50_model, get_loaders
 
 # RESNET-50 FEATURE EXTRACTION
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 resnet50 = models.resnet50(weights=models.ResNet50_Weights.DEFAULT) # pretrained model with default weights
+train_loader, test_loader = get_loaders()
+# resnet50 = get_trained_ResNet50_model(train_loader, device) # Get the trained ResNet-50 model (with frozen backbone and new head)
 resnet50.fc = nn.Identity() # This replaces the final classification layer with an identity function, so we get raw features instead of class scores
 resnet50.eval() # Set the model to evaluation mode (important for layers like dropout or batchnorm)
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
 resnet50.to(device)
 
 # Function to extract features using ResNet-50

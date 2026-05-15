@@ -21,7 +21,7 @@ efficientnet.eval()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 efficientnet.to(device)
 
-# Function to extract features using MobileNetV2
+# Function to extract features using EfficientNet-B0 for a given set of image paths and labels. 
 def extract_features_EfficientNet(paths=None, labels=None):
     # Get the data loader for the given paths and labels
     loader = get_loader(paths=paths, labels=labels)
