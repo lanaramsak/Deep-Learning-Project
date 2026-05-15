@@ -85,7 +85,7 @@ except ImportError:
 # 1.  CONFIGURATION
 # ──────────────────────────────────────────────────────────────
 
-BASE_DIR = Path(os.environ.get("DDPM_BASE_DIR", "/data/01/up202402612/data"))
+BASE_DIR = Path(os.environ.get("DDPM_BASE_DIR", "/data/01/up202512956/data"))
 REAL_DIR = BASE_DIR / "wiki"
 
 MASTER_SEED = 42

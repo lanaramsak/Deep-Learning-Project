@@ -48,7 +48,7 @@ except ImportError:
 # ──────────────────────────────────────────────────────────────
 
 BASE_DIR = Path(os.environ.get("DDPM_BASE_DIR", "/data/01/up202402612/data"))
-REAL_DIR = Path("/data/01/up202402612/data/wiki")
+REAL_DIR = Path("/data/01/up202512956/data/wiki")
 
 DATA_DIRS = [
     str(BASE_DIR / "inpainting"),

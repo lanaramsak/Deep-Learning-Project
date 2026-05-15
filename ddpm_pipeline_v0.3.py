@@ -63,7 +63,7 @@ except ImportError:
 # ──────────────────────────────────────────────────────────────
 
 # Base data directory (can be overridden via env var)
-BASE_DIR = Path(os.environ.get("DDPM_BASE_DIR", "/data/01/up202402612/data"))
+BASE_DIR = Path(os.environ.get("DDPM_BASE_DIR", "/data/01/up202512956/data"))
 
 # REAL face images (wiki) — used for BOTH training and FID reference
 REAL_DIR = BASE_DIR / "wiki"
