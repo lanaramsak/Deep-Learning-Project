@@ -1,3 +1,20 @@
+"""
+ENSEMBLE OF SINGLE-VIEW AND TWO-BRANCH CLASSIFIERS
+
+This script trains several strong single-view classifiers on a shared split,
+loads a previously trained two-branch checkpoint, and evaluates both
+individual models and ensemble voting strategies on the same validation set.
+
+The main motivation is to combine complementary model types:
+- CNN-based single-view classifiers
+- a Vision Transformer classifier
+- a two-branch classifier that sees both the original image and a transformed
+  secondary view
+
+By keeping the validation split shared across models, the comparison and the
+final ensemble evaluation remain aligned and methodologically consistent.
+"""
+
 from argparse import ArgumentParser
 import csv
 from pathlib import Path
@@ -21,7 +38,16 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "results" / "ensemble_with_two_branch"
 
+
 def create_shared_split(paths, labels, test_size=0.2, random_state=42):
+    """
+    Create one shared train/validation split for all models in the ensemble.
+
+    This is important because ensemble members must be evaluated on the same
+    validation examples in the same order; otherwise their predictions cannot
+    be combined meaningfully.
+    """
+
     return train_test_split(
         paths,
         labels,
@@ -33,6 +59,13 @@ def create_shared_split(paths, labels, test_size=0.2, random_state=42):
 
 
 def build_single_view_loaders(train_paths, val_paths, train_labels, val_labels, batch_size=32):
+    """
+    Build DataLoaders for the CNN-based single-view classifiers.
+
+    These models use the standard image transform from the existing
+    classification pipeline.
+    """
+
     train_dataset = PathLabelDataset(train_paths, train_labels, transform=build_transform(224))
     val_dataset = PathLabelDataset(val_paths, val_labels, transform=build_transform(224))
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -41,6 +74,13 @@ def build_single_view_loaders(train_paths, val_paths, train_labels, val_labels, 
 
 
 def build_vit_loaders(train_paths, val_paths, train_labels, val_labels, batch_size=32):
+    """
+    Build DataLoaders for the Vision Transformer.
+
+    ViT uses its own preprocessing transform so that inputs stay aligned with
+    the pretrained weights used by the model.
+    """
+
     train_dataset = PathLabelDataset(train_paths, train_labels, transform=vit_transform)
     val_dataset = PathLabelDataset(val_paths, val_labels, transform=vit_transform)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -56,6 +96,13 @@ def build_two_branch_val_loader(
     rotation_degrees=15.0,
     batch_size=32,
 ):
+    """
+    Build the validation loader for the two-branch model.
+
+    Only the validation loader is needed here because the two-branch model is
+    assumed to be trained already and is loaded from a checkpoint.
+    """
+
     dataset = TwoBranchPathLabelDataset(
         val_paths,
         val_labels,
@@ -68,25 +115,56 @@ def build_two_branch_val_loader(
 
 
 def cnn_predict_fn(model, images):
+    """
+    Convert CNN logits to positive-class probabilities.
+    """
+
     return torch.sigmoid(model(images)).squeeze()
 
 
 def vit_predict_fn(model, images):
+    """
+    Convert ViT logits to positive-class probabilities.
+    """
+
     logits = model(images)
     return torch.softmax(logits, dim=1)[:, 1]
 
 
 def two_branch_predict_fn(model, x_original, x_second_view):
+    """
+    Convert two-branch logits to positive-class probabilities.
+    """
+
     logits = model(x_original, x_second_view)
     return torch.softmax(logits, dim=1)[:, 1]
 
 
 class EnsembleVoter:
+    """
+    Evaluate individual models and aggregate their predictions into an
+    ensemble.
+
+    Each model specification provides:
+    - a trained model
+    - a prediction function
+    - a validation loader
+    - a `kind` label describing whether it expects single-view or two-branch
+      input
+    """
+
     def __init__(self, model_specs, device):
         self.model_specs = model_specs
         self.device = device
 
     def _predict_single_model(self, spec):
+        """
+        Collect labels, hard predictions, and probabilities for one model.
+
+        The logic branches depending on whether the model consumes a single
+        image input or a two-branch `(original, transformed)` pair.
+        """
+
         model = spec["model"]
         loader = spec["loader"]
         kind = spec["kind"]
@@ -99,6 +177,8 @@ class EnsembleVoter:
 
         with torch.no_grad():
             for batch in loader:
+                # The two-branch model expects two aligned views of the same
+                # image, while the single-view models expect only one image.
                 if kind == "two_branch":
                     x_original, x_second_view, labels = batch
                     x_original = x_original.to(self.device)
@@ -109,6 +189,8 @@ class EnsembleVoter:
                     images = images.to(self.device)
                     probs = predict_fn(model, images)
 
+                # Convert probabilities to hard class predictions using the
+                # standard 0.5 threshold.
                 preds = (probs >= 0.5).long()
                 all_probs.extend(probs.detach().cpu().numpy().tolist())
                 all_preds.extend(preds.detach().cpu().numpy().tolist())
@@ -117,6 +199,13 @@ class EnsembleVoter:
         return np.array(all_labels), np.array(all_preds), np.array(all_probs)
 
     def evaluate(self, mode="soft"):
+        """
+        Evaluate all individual models and build an ensemble prediction.
+
+        `mode="soft"` averages probabilities.
+        `mode="hard"` averages binary decisions.
+        """
+
         all_model_preds = {}
         all_model_probs = {}
         y_true = None
@@ -129,6 +218,8 @@ class EnsembleVoter:
             if y_true is None:
                 y_true = labels
             else:
+                # All models must predict on the exact same validation split
+                # so that ensemble aggregation is well-defined.
                 if not np.array_equal(y_true, labels):
                     raise ValueError("Model loaders are not aligned on the same validation split.")
 
@@ -146,6 +237,8 @@ class EnsembleVoter:
             )
             print(f"  [{spec['name']}] predictions collected")
 
+        # Hard voting combines already-thresholded predictions, while soft
+        # voting combines probabilities before thresholding.
         if mode == "hard":
             stacked = np.stack(list(all_model_preds.values()), axis=0)
             final_preds = (stacked.mean(axis=0) >= 0.5).astype(int)
@@ -169,6 +262,10 @@ class EnsembleVoter:
 
 
 def load_two_branch_model(checkpoint_path):
+    """
+    Load a trained two-branch checkpoint for ensemble evaluation.
+    """
+
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model = TwoBranchResNet18(num_classes=2, pretrained=False, dropout=0.3).to(device)
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -176,6 +273,10 @@ def load_two_branch_model(checkpoint_path):
 
 
 def save_metrics_csv(individual_rows, ensemble_results, output_dir):
+    """
+    Save summary metrics for both individual models and the ensemble.
+    """
+
     output_path = output_dir / "ensemble_metrics.csv"
     fieldnames = ["name", "accuracy", "f1", "auc", "eer"]
     with output_path.open("w", newline="") as csv_file:
@@ -187,6 +288,10 @@ def save_metrics_csv(individual_rows, ensemble_results, output_dir):
 
 
 def save_report(ensemble_results, output_dir):
+    """
+    Save a more detailed text report for the ensemble variants.
+    """
+
     output_path = output_dir / "ensemble_report.txt"
     sections = []
     for result in ensemble_results:
@@ -205,6 +310,10 @@ def save_report(ensemble_results, output_dir):
 
 
 def plot_metric_bars(individual_rows, ensemble_results, output_dir):
+    """
+    Plot side-by-side metric bars for all individual models and ensembles.
+    """
+
     rows = individual_rows + ensemble_results
     labels = [row["name"] for row in rows]
     metrics = [
@@ -231,6 +340,10 @@ def plot_metric_bars(individual_rows, ensemble_results, output_dir):
 
 
 def parse_args():
+    """
+    Parse CLI arguments for the ensemble experiment.
+    """
+
     parser = ArgumentParser(description="Train a shared-split ensemble and add the best two-branch model.")
     parser.add_argument(
         "--two-branch-checkpoint",
@@ -260,14 +373,30 @@ def parse_args():
 
 
 def main():
+    """
+    Run the full ensemble pipeline.
+
+    The workflow is:
+    1. build one shared split
+    2. train the single-view models on that split
+    3. load the trained two-branch checkpoint
+    4. evaluate individual models
+    5. evaluate hard and soft ensemble voting
+    6. save metrics, report, and plots
+    """
+
     args = parse_args()
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Every model in the ensemble sees the same train/validation partition so
+    # that their scores can be compared and combined fairly.
     train_paths, val_paths, train_labels, val_labels = create_shared_split(
         DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL
     )
 
+    # CNN models and ViT use different preprocessing pipelines, so they get
+    # separate loaders even though the underlying split is shared.
     train_loader, val_loader = build_single_view_loaders(
         train_paths, val_paths, train_labels, val_labels
     )
@@ -286,9 +415,13 @@ def main():
     print(f"Train size: {len(train_paths)}")
     print(f"Validation size: {len(val_paths)}")
 
+    # Train the single-view ensemble members from scratch on the shared split.
     resnet50 = get_trained_ResNet50_model(train_loader, device)
     mobilenet = get_trained_MobileNet_model(train_loader, device)
     vit = get_trained_ViT_model(vit_train_loader, device)
+
+    # The two-branch model is trained separately and then plugged into the
+    # ensemble as an additional, structurally different member.
     two_branch_model = load_two_branch_model(args.two_branch_checkpoint)
 
     ensemble = EnsembleVoter(

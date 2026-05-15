@@ -34,7 +34,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
-from torchvision import models
+from torchvision import models, transforms
 
 from evaluation_metrics import get_eer_score, get_f1_score
 from import_data import DEFAULT_SEED, PathLabelDataset, get_sample_paths
@@ -53,8 +53,59 @@ DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "results" / "vit_experiment"
 VIT_WEIGHTS = models.ViT_B_16_Weights.DEFAULT
 vit_transform = VIT_WEIGHTS.transforms()
 
+# Explicit preprocessing pipeline for controlled experiments. The evaluation
+# transform stays fixed, while the training transform can optionally include
+# light augmentations such as color jitter and Gaussian blur.
+VIT_IMAGE_SIZE = 224
+VIT_NORMALIZE_MEAN = (0.485, 0.456, 0.406)
+VIT_NORMALIZE_STD = (0.229, 0.224, 0.225)
 
-def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=DEFAULT_BATCH_SIZE, train_split=0.8):
+
+def build_vit_transform(use_color_jitter=False, use_blur=False):
+    """
+    Build a ViT-compatible transform pipeline.
+
+    The baseline preprocessing is kept identical to the pretrained ImageNet
+    setup. Optional train-time augmentations can be inserted before tensor
+    conversion so we can test whether they improve the strong single-view ViT
+    baseline without changing the rest of the pipeline.
+    """
+
+    transform_steps = [
+        transforms.Resize(VIT_IMAGE_SIZE),
+        transforms.CenterCrop(VIT_IMAGE_SIZE),
+    ]
+
+    if use_color_jitter:
+        transform_steps.append(
+            transforms.ColorJitter(
+                brightness=0.2,
+                contrast=0.2,
+                saturation=0.15,
+                hue=0.02,
+            )
+        )
+
+    if use_blur:
+        transform_steps.append(transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 1.0)))
+
+    transform_steps.extend(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(mean=VIT_NORMALIZE_MEAN, std=VIT_NORMALIZE_STD),
+        ]
+    )
+
+    return transforms.Compose(transform_steps)
+
+
+def get_loaders(
+    n=N_SAMPLES_PER_CLASS,
+    batch_size=DEFAULT_BATCH_SIZE,
+    train_split=0.8,
+    use_color_jitter=False,
+    use_blur=False,
+):
     """
     Build train/test DataLoaders for the ViT experiment.
 
@@ -77,7 +128,11 @@ def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=DEFAULT_BATCH_SIZE, train_spli
         shuffle=True,
     )
 
-    train_dataset = PathLabelDataset(train_paths, train_labels, transform=vit_transform)
+    train_transform = build_vit_transform(
+        use_color_jitter=use_color_jitter,
+        use_blur=use_blur,
+    )
+    train_dataset = PathLabelDataset(train_paths, train_labels, transform=train_transform)
     test_dataset = PathLabelDataset(test_paths, test_labels, transform=vit_transform)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -361,22 +416,32 @@ def plot_evaluation(result, output_dir):
     return output_path
 
 
-# def parse_args():
-#     """
-#     Parse CLI arguments for standalone ViT runs.
-#     """
+def parse_args():
+    """
+    Parse CLI arguments for standalone ViT runs.
+    """
 
-#     parser = ArgumentParser(description="Run a standalone Vision Transformer experiment.")
-#     parser.add_argument(
-#         "--n",
-#         type=int,
-#         default=N_SAMPLES_PER_CLASS,
-#         help="Number of samples per class. n=500 means 1000 total images.",
-#     )
-#     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
-#     parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
-#     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
-#     return parser.parse_args()
+    parser = ArgumentParser(description="Run a standalone Vision Transformer experiment.")
+    parser.add_argument(
+        "--n",
+        type=int,
+        default=N_SAMPLES_PER_CLASS,
+        help="Number of samples per class. n=500 means 1000 total images.",
+    )
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--color-jitter",
+        action="store_true",
+        help="Apply light ColorJitter augmentation to training images only.",
+    )
+    parser.add_argument(
+        "--gaussian-blur",
+        action="store_true",
+        help="Apply light GaussianBlur augmentation to training images only.",
+    )
+    return parser.parse_args()
 
 
 def main():
@@ -391,19 +456,21 @@ def main():
     5. saves metrics, report, and plots
     """
 
-    # args = parse_args()
-    # output_dir = args.output_dir
-    output_dir = Path("output")  # Default output directory
+    args = parse_args()
+    output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # train_loader, test_loader = get_loaders(n=args.n, batch_size=args.batch_size)
-    train_loader, test_loader = get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=DEFAULT_BATCH_SIZE)
+    train_loader, test_loader = get_loaders(
+        n=args.n,
+        batch_size=args.batch_size,
+        use_color_jitter=args.color_jitter,
+        use_blur=args.gaussian_blur,
+    )
     model = get_trained_ViT_model(
         train_loader,
         device,
-        # epochs=args.epochs,
-        epochs=DEFAULT_EPOCHS,
+        epochs=args.epochs,
         val_loader=test_loader,
         output_dir=output_dir,
     )

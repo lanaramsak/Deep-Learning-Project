@@ -1,3 +1,17 @@
+"""
+TWO-BRANCH ROTATION+BLUR COMBINATION EXPERIMENT
+
+This script follows the ablation study and focuses only on the most promising
+ combined second-view settings. Instead of testing every blur or rotation
+ separately, it evaluates combined `rotation + blur` views and keeps the best
+ checkpoint for each run.
+
+The main goal is to answer:
+- do the strongest rotation and blur settings complement each other?
+- which combined configuration should be kept for downstream use, such as
+  ensemble integration?
+"""
+
 from argparse import ArgumentParser
 import copy
 import csv
@@ -17,7 +31,6 @@ from TwoBranchResNet18 import (
     train_one_epoch,
     unfreeze_last_resnet_block,
 )
-#- to vision transformer
 from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL
 
 
@@ -27,6 +40,10 @@ DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "results" / "two_branch_combo"
 
 
 def make_experiment(label, blur_radius, rotation_degrees):
+    """
+    Create a compact experiment configuration for a combined view.
+    """
+
     return {
         "label": label,
         "second_view_type": "rotation_blur",
@@ -36,6 +53,10 @@ def make_experiment(label, blur_radius, rotation_degrees):
 
 
 def get_experiments():
+    """
+    Define the two strongest rotation+blur combinations to compare.
+    """
+
     return [
         make_experiment("rotation_10_blur_2.0", blur_radius=2.0, rotation_degrees=10.0),
         make_experiment("rotation_15_blur_2.0", blur_radius=2.0, rotation_degrees=15.0),
@@ -44,6 +65,11 @@ def get_experiments():
 
 @torch.no_grad()
 def evaluate_with_probabilities(model, loader, criterion, device=device):
+    """
+    Evaluate one trained model on the validation split and return both summary
+    metrics and the raw arrays needed for final reporting.
+    """
+
     model.eval()
     running_loss = 0.0
     correct = 0
@@ -86,6 +112,10 @@ def evaluate_with_probabilities(model, loader, criterion, device=device):
 
 
 def is_better(candidate, best, metric_name):
+    """
+    Compare two epoch records using the selected checkpoint metric.
+    """
+
     if best is None:
         return True
     return candidate[metric_name] > best[metric_name]
@@ -103,6 +133,13 @@ def train_with_best_checkpoint(
     phase1_lr=1e-3,
     phase2_lr=1e-4,
 ):
+    """
+    Train one two-branch model in two stages and keep the best checkpoint.
+
+    Stage 1 trains only the classifier head.
+    Stage 2 unfreezes the last ResNet block for limited fine-tuning.
+    """
+
     model.to(device)
     criterion = nn.CrossEntropyLoss()
     history = []
@@ -111,6 +148,11 @@ def train_with_best_checkpoint(
     best_checkpoint_path = output_dir / f"{experiment_label}_best.pt"
 
     def run_epoch_loop(epochs, phase_name, optimizer):
+        """
+        Run one training phase and update the best checkpoint when the chosen
+        validation metric improves.
+        """
+
         nonlocal best_state, best_metrics
 
         for epoch in range(1, epochs + 1):
@@ -131,6 +173,8 @@ def train_with_best_checkpoint(
             }
             history.append(record)
 
+            # The best checkpoint is chosen using the metric selected by the
+            # caller, typically validation AUC or validation F1.
             if is_better(record, best_metrics, best_metric):
                 best_metrics = copy.deepcopy(record)
                 best_state = copy.deepcopy(model.state_dict())
@@ -151,14 +195,17 @@ def train_with_best_checkpoint(
                 f"val_f1: {val_metrics['val_f1']:.4f} | val_auc: {val_metrics['val_auc']:.4f}"
             )
 
+    # First train only the new head.
     freeze_backbones(model)
     optimizer = build_optimizer(model, learning_rate=phase1_lr)
     run_epoch_loop(phase1_epochs, "head_training", optimizer)
 
+    # Then unfreeze the last block and fine-tune more selectively.
     unfreeze_last_resnet_block(model)
     optimizer = build_optimizer(model, learning_rate=phase2_lr)
     run_epoch_loop(phase2_epochs, "fine_tuning", optimizer)
 
+    # Restore the best checkpoint before producing the final metrics.
     model.load_state_dict(best_state)
     final_metrics = evaluate_with_probabilities(model, val_loader, criterion, device=device)
 
@@ -166,6 +213,10 @@ def train_with_best_checkpoint(
 
 
 def run_single_experiment(experiment, output_dir, best_metric):
+    """
+    Train and evaluate one combined rotation+blur setting.
+    """
+
     train_loader, val_loader = create_two_branch_dataloaders(
         paths=DEFAULT_PATHS_SMALL,
         labels=DEFAULT_Y_SMALL,
@@ -212,6 +263,10 @@ def run_single_experiment(experiment, output_dir, best_metric):
 
 
 def format_result(result):
+    """
+    Convert one experiment result into a readable text summary.
+    """
+
     best = result["best_epoch_metrics"]
     lines = [
         f"Experiment: {result['label']}",
@@ -237,6 +292,10 @@ def format_result(result):
 
 
 def save_metrics_csv(results, output_dir):
+    """
+    Save the final metrics and best-checkpoint metadata as CSV.
+    """
+
     output_path = output_dir / "summary_metrics.csv"
     fieldnames = [
         "label",
@@ -283,6 +342,10 @@ def save_metrics_csv(results, output_dir):
 
 
 def save_detailed_report(results, output_dir):
+    """
+    Save a detailed text report for both combined-view experiments.
+    """
+
     output_path = output_dir / "detailed_report.txt"
     sections = []
     for result in results:
@@ -294,6 +357,10 @@ def save_detailed_report(results, output_dir):
 
 
 def plot_training_curves(results, output_dir):
+    """
+    Plot validation loss, validation F1, and validation AUC across training.
+    """
+
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     metric_specs = [
         ("val_loss", "Validation Loss"),
@@ -320,6 +387,10 @@ def plot_training_curves(results, output_dir):
 
 
 def plot_metric_bars(results, output_dir):
+    """
+    Plot final metric bars for the compared combined-view configurations.
+    """
+
     labels = [result["label"] for result in results]
     metrics = [
         ("accuracy", "Accuracy"),
@@ -345,6 +416,10 @@ def plot_metric_bars(results, output_dir):
 
 
 def parse_args():
+    """
+    Parse CLI arguments for the combination experiment runner.
+    """
+
     parser = ArgumentParser(description="Run two-branch combined rotation+blur experiments.")
     parser.add_argument(
         "--output-dir",
@@ -362,6 +437,16 @@ def parse_args():
 
 
 def main():
+    """
+    Run the full combined-view experiment workflow.
+
+    The workflow is:
+    1. define the shortlisted rotation+blur combinations
+    2. train and validate each configuration
+    3. keep the best checkpoint for each run
+    4. save metrics, report, and plots
+    """
+
     args = parse_args()
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -374,6 +459,8 @@ def main():
     print(f"Best checkpoint metric: {args.best_metric}")
 
     for experiment in experiments:
+        # Each run reuses the same data protocol and differs only in the
+        # combined second-view transformation.
         print(f"\nRunning experiment: {experiment['label']}")
         result = run_single_experiment(experiment, output_dir, args.best_metric)
         results.append(result)
