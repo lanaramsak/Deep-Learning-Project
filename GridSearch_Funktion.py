@@ -4,10 +4,14 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 
+# Own Function for Evaluation
 from evaluation_metrics import get_classification_report, get_f1_score, get_auc_score, get_eer_score
 
 
-# Default hyperparameter grid for SVM
+# ---------------------------------------------------------------------------
+# Hyperparameter search space for grid search
+# ---------------------------------------------------------------------------
+
 DEFAULT_PARAM_GRID = {
     "svm__C":      [0.01, 0.1, 1, 10, 100],
     "svm__kernel": ["linear", "rbf"],
@@ -50,14 +54,21 @@ def run_grid_search(
         auc             – ROC-AUC on test set
         eer             – Equal Error Rate on test set
     """
+
+        # Fall back to the default parameter grid if none was provided
+
     if param_grid is None:
         param_grid = DEFAULT_PARAM_GRID
 
-    # Pipeline: scale features, then SVM
+    # StandardScaler normalizes each feature to μ=0, σ=1.
+    # Crucially, the scaler is fitted ONLY on X_train and then applied to X_test –
+
     pipeline = Pipeline([
         ("scaler", StandardScaler()),
         ("svm",    SVC(probability=True, random_state=42)),
     ])
+
+     # Grid search with cross-validation
 
     grid_search = GridSearchCV(
         pipeline,
@@ -69,11 +80,20 @@ def run_grid_search(
         refit=True,
     )
 
+    # Run the grid search on the training data
+
+
     grid_search.fit(X_train, y_train)
+
+        # Evaluation on the test set
+
 
     best_model = grid_search.best_estimator_
     final_preds = best_model.predict(X_test)
     y_probs     = best_model.predict_proba(X_test)[:, 1]
+
+    # Assemble and return the results dict
+
 
     return {
         "best_estimator":        best_model,
