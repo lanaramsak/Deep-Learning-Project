@@ -68,7 +68,16 @@ def evaluate_with_probabilities(model, loader, device=device):
     return y_true, y_pred, y_score
 
 
-def make_experiment(label, second_view_type, blur_radius=0.0, rotation_degrees=0.0):
+def make_experiment(
+    label,
+    second_view_type,
+    blur_radius=0.0,
+    rotation_degrees=0.0,
+    jitter_brightness=0.0,
+    jitter_contrast=0.0,
+    jitter_saturation=0.0,
+    jitter_hue=0.0,
+):
     """
     Create a compact experiment configuration dictionary.
     """
@@ -78,6 +87,10 @@ def make_experiment(label, second_view_type, blur_radius=0.0, rotation_degrees=0
         "second_view_type": second_view_type,
         "blur_radius": blur_radius,
         "rotation_degrees": rotation_degrees,
+        "jitter_brightness": jitter_brightness,
+        "jitter_contrast": jitter_contrast,
+        "jitter_saturation": jitter_saturation,
+        "jitter_hue": jitter_hue,
     }
 
 
@@ -97,6 +110,22 @@ def get_experiments(include_rotation=True):
         make_experiment("blur_1.0", "blur", blur_radius=1.0),
         make_experiment("blur_2.0", "blur", blur_radius=2.0),
         make_experiment("blur_3.0", "blur", blur_radius=3.0),
+        make_experiment(
+            "color_jitter_light",
+            "color_jitter",
+            jitter_brightness=0.1,
+            jitter_contrast=0.1,
+            jitter_saturation=0.1,
+            jitter_hue=0.02,
+        ),
+        make_experiment(
+            "color_jitter_medium",
+            "color_jitter",
+            jitter_brightness=0.2,
+            jitter_contrast=0.2,
+            jitter_saturation=0.15,
+            jitter_hue=0.02,
+        ),
         make_experiment("rotation_5", "rotation", rotation_degrees=5.0),
         make_experiment("rotation_10", "rotation", rotation_degrees=10.0),
         make_experiment("rotation_15", "rotation", rotation_degrees=15.0),
@@ -111,6 +140,15 @@ def get_experiments(include_rotation=True):
             "rotation_blur",
             blur_radius=2.0,
             rotation_degrees=15.0,
+        ),
+        make_experiment(
+            "rotation_10_color_jitter",
+            "rotation_color_jitter",
+            rotation_degrees=10.0,
+            jitter_brightness=0.2,
+            jitter_contrast=0.2,
+            jitter_saturation=0.15,
+            jitter_hue=0.02,
         ),
     ]
 
@@ -132,6 +170,10 @@ def run_single_experiment(experiment, paths, labels):
         second_view_type=experiment["second_view_type"],
         blur_radius=experiment["blur_radius"],
         rotation_degrees=experiment["rotation_degrees"],
+        jitter_brightness=experiment["jitter_brightness"],
+        jitter_contrast=experiment["jitter_contrast"],
+        jitter_saturation=experiment["jitter_saturation"],
+        jitter_hue=experiment["jitter_hue"],
         batch_size=32,
         test_size=0.2,
         random_state=42,
@@ -163,6 +205,10 @@ def run_single_experiment(experiment, paths, labels):
         "second_view_type": experiment["second_view_type"],
         "blur_radius": experiment["blur_radius"],
         "rotation_degrees": experiment["rotation_degrees"],
+        "jitter_brightness": experiment["jitter_brightness"],
+        "jitter_contrast": experiment["jitter_contrast"],
+        "jitter_saturation": experiment["jitter_saturation"],
+        "jitter_hue": experiment["jitter_hue"],
         "history": history,
         "accuracy": accuracy_score(y_true, y_pred),
         "f1": get_f1_score(y_true, y_pred),
@@ -183,6 +229,10 @@ def format_result(result):
         f"Second view: {result['second_view_type']}",
         f"Blur radius: {result['blur_radius']}",
         f"Rotation degrees: {result['rotation_degrees']}",
+        f"Jitter brightness: {result['jitter_brightness']}",
+        f"Jitter contrast: {result['jitter_contrast']}",
+        f"Jitter saturation: {result['jitter_saturation']}",
+        f"Jitter hue: {result['jitter_hue']}",
         f"Accuracy: {result['accuracy']:.4f}",
         f"F1: {result['f1']:.4f}",
         f"AUC: {result['auc']:.4f}",
@@ -206,6 +256,10 @@ def save_metrics_csv(results, output_dir):
         "second_view_type",
         "blur_radius",
         "rotation_degrees",
+        "jitter_brightness",
+        "jitter_contrast",
+        "jitter_saturation",
+        "jitter_hue",
         "accuracy",
         "f1",
         "auc",

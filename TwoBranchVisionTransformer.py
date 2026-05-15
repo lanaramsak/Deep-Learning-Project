@@ -12,7 +12,7 @@ import torch.nn as nn
 from PIL import Image, ImageFilter
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
-from torchvision import models
+from torchvision import models, transforms
 from tqdm import tqdm
 
 from import_data import DEFAULT_PATHS_SMALL, DEFAULT_SEED, DEFAULT_Y_SMALL
@@ -42,6 +42,10 @@ class TwoBranchVisionDataset(Dataset):
         second_view_type="blur",
         blur_radius=2.0,
         rotation_degrees=10.0,
+        jitter_brightness=0.2,
+        jitter_contrast=0.2,
+        jitter_saturation=0.15,
+        jitter_hue=0.02,
     ):
         self.paths = paths
         self.labels = labels
@@ -49,6 +53,12 @@ class TwoBranchVisionDataset(Dataset):
         self.blur_radius = blur_radius
         self.rotation_degrees = rotation_degrees
         self.transform = vit_transform
+        self.color_jitter = transforms.ColorJitter(
+            brightness=jitter_brightness,
+            contrast=jitter_contrast,
+            saturation=jitter_saturation,
+            hue=jitter_hue,
+        )
 
     def _build_second_view(self, image):
         if self.second_view_type == "identity":
@@ -74,6 +84,18 @@ class TwoBranchVisionDataset(Dataset):
             )
             return rotated.filter(ImageFilter.GaussianBlur(radius=self.blur_radius))
 
+        if self.second_view_type == "color_jitter":
+            return self.color_jitter(image.copy())
+
+        if self.second_view_type == "rotation_color_jitter":
+            rotated = image.rotate(
+                self.rotation_degrees,
+                resample=Image.Resampling.BILINEAR,
+                expand=False,
+                fillcolor=(0, 0, 0),
+            )
+            return self.color_jitter(rotated)
+
         raise ValueError(f"Unsupported second_view_type: {self.second_view_type}")
 
     def __len__(self):
@@ -97,6 +119,10 @@ def create_two_branch_vit_dataloaders(
     second_view_type="blur",
     blur_radius=2.0,
     rotation_degrees=10.0,
+    jitter_brightness=0.2,
+    jitter_contrast=0.2,
+    jitter_saturation=0.15,
+    jitter_hue=0.02,
     batch_size=16,
     test_size=0.2,
     random_state=DEFAULT_SEED,
@@ -125,6 +151,10 @@ def create_two_branch_vit_dataloaders(
         second_view_type=second_view_type,
         blur_radius=blur_radius,
         rotation_degrees=rotation_degrees,
+        jitter_brightness=jitter_brightness,
+        jitter_contrast=jitter_contrast,
+        jitter_saturation=jitter_saturation,
+        jitter_hue=jitter_hue,
     )
     val_dataset = TwoBranchVisionDataset(
         val_paths,
@@ -132,6 +162,10 @@ def create_two_branch_vit_dataloaders(
         second_view_type=second_view_type,
         blur_radius=blur_radius,
         rotation_degrees=rotation_degrees,
+        jitter_brightness=jitter_brightness,
+        jitter_contrast=jitter_contrast,
+        jitter_saturation=jitter_saturation,
+        jitter_hue=jitter_hue,
     )
 
     train_loader = DataLoader(
@@ -157,6 +191,10 @@ def create_two_branch_dataloaders(
     second_view_type="blur",
     blur_radius=2.0,
     rotation_degrees=10.0,
+    jitter_brightness=0.2,
+    jitter_contrast=0.2,
+    jitter_saturation=0.15,
+    jitter_hue=0.02,
     batch_size=16,
     test_size=0.2,
     random_state=DEFAULT_SEED,
@@ -176,6 +214,10 @@ def create_two_branch_dataloaders(
         second_view_type=second_view_type,
         blur_radius=blur_radius,
         rotation_degrees=rotation_degrees,
+        jitter_brightness=jitter_brightness,
+        jitter_contrast=jitter_contrast,
+        jitter_saturation=jitter_saturation,
+        jitter_hue=jitter_hue,
         batch_size=batch_size,
         test_size=test_size,
         random_state=random_state,
@@ -400,6 +442,10 @@ def build_default_two_branch_vit_setup(
     second_view_type="blur",
     blur_radius=2.0,
     rotation_degrees=10.0,
+    jitter_brightness=0.2,
+    jitter_contrast=0.2,
+    jitter_saturation=0.15,
+    jitter_hue=0.02,
     batch_size=16,
     test_size=0.2,
     random_state=DEFAULT_SEED,
@@ -415,6 +461,10 @@ def build_default_two_branch_vit_setup(
         second_view_type=second_view_type,
         blur_radius=blur_radius,
         rotation_degrees=rotation_degrees,
+        jitter_brightness=jitter_brightness,
+        jitter_contrast=jitter_contrast,
+        jitter_saturation=jitter_saturation,
+        jitter_hue=jitter_hue,
         batch_size=batch_size,
         test_size=test_size,
         random_state=random_state,

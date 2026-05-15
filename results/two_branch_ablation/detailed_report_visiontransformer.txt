@@ -2,22 +2,22 @@ Experiment: original_only
 Second view: identity
 Blur radius: 0.0
 Rotation degrees: 0.0
-Accuracy: 0.5650
-F1: 0.5837
-AUC: 0.5712
-EER: 0.4400
+Accuracy: 0.7538
+F1: 0.7589
+AUC: 0.8348
+EER: 0.2375
 Confusion matrix:
-[[52 48]
- [39 61]]
+[[293 107]
+ [ 90 310]]
 Classification report:
               precision    recall  f1-score   support
 
-           0     0.5714    0.5200    0.5445       100
-           1     0.5596    0.6100    0.5837       100
+           0     0.7650    0.7325    0.7484       400
+           1     0.7434    0.7750    0.7589       400
 
-    accuracy                         0.5650       200
-   macro avg     0.5655    0.5650    0.5641       200
-weighted avg     0.5655    0.5650    0.5641       200
+    accuracy                         0.7538       800
+   macro avg     0.7542    0.7538    0.7536       800
+weighted avg     0.7542    0.7538    0.7536       800
 
 
 ========================================================================
@@ -26,22 +26,22 @@ Experiment: blur_1.0
 Second view: blur
 Blur radius: 1.0
 Rotation degrees: 0.0
-Accuracy: 0.5300
-F1: 0.5566
-AUC: 0.5411
-EER: 0.4300
+Accuracy: 0.8213
+F1: 0.8250
+AUC: 0.9070
+EER: 0.1750
 Confusion matrix:
-[[47 53]
- [41 59]]
+[[320  80]
+ [ 63 337]]
 Classification report:
               precision    recall  f1-score   support
 
-           0     0.5341    0.4700    0.5000       100
-           1     0.5268    0.5900    0.5566       100
+           0     0.8355    0.8000    0.8174       400
+           1     0.8082    0.8425    0.8250       400
 
-    accuracy                         0.5300       200
-   macro avg     0.5304    0.5300    0.5283       200
-weighted avg     0.5304    0.5300    0.5283       200
+    accuracy                         0.8213       800
+   macro avg     0.8218    0.8213    0.8212       800
+weighted avg     0.8218    0.8213    0.8212       800
 
 
 ========================================================================
@@ -50,22 +50,22 @@ Experiment: blur_2.0
 Second view: blur
 Blur radius: 2.0
 Rotation degrees: 0.0
-Accuracy: 0.5550
-F1: 0.4734
-AUC: 0.5768
-EER: 0.4500
+Accuracy: 0.8413
+F1: 0.8434
+AUC: 0.9338
+EER: 0.1575
 Confusion matrix:
-[[71 29]
- [60 40]]
+[[331  69]
+ [ 58 342]]
 Classification report:
               precision    recall  f1-score   support
 
-           0     0.5420    0.7100    0.6147       100
-           1     0.5797    0.4000    0.4734       100
+           0     0.8509    0.8275    0.8390       400
+           1     0.8321    0.8550    0.8434       400
 
-    accuracy                         0.5550       200
-   macro avg     0.5608    0.5550    0.5440       200
-weighted avg     0.5608    0.5550    0.5440       200
+    accuracy                         0.8413       800
+   macro avg     0.8415    0.8413    0.8412       800
+weighted avg     0.8415    0.8413    0.8412       800
 
 
 ========================================================================
@@ -74,22 +74,22 @@ Experiment: blur_3.0
 Second view: blur
 Blur radius: 3.0
 Rotation degrees: 0.0
-Accuracy: 0.5600
-F1: 0.5111
-AUC: 0.5625
-EER: 0.4600
+Accuracy: 0.8462
+F1: 0.8322
+AUC: 0.9446
+EER: 0.1325
 Confusion matrix:
-[[66 34]
- [54 46]]
+[[372  28]
+ [ 95 305]]
 Classification report:
               precision    recall  f1-score   support
 
-           0     0.5500    0.6600    0.6000       100
-           1     0.5750    0.4600    0.5111       100
+           0     0.7966    0.9300    0.8581       400
+           1     0.9159    0.7625    0.8322       400
 
-    accuracy                         0.5600       200
-   macro avg     0.5625    0.5600    0.5556       200
-weighted avg     0.5625    0.5600    0.5556       200
+    accuracy                         0.8462       800
+   macro avg     0.8562    0.8462    0.8452       800
+weighted avg     0.8562    0.8462    0.8452       800
 
 
 ========================================================================
@@ -98,22 +98,22 @@ Experiment: rotation_5
 Second view: rotation
 Blur radius: 0.0
 Rotation degrees: 5.0
-Accuracy: 0.5550
-F1: 0.5528
-AUC: 0.5661
-EER: 0.4400
+Accuracy: 0.7425
+F1: 0.7494
+AUC: 0.8377
+EER: 0.2475
 Confusion matrix:
-[[56 44]
- [45 55]]
+[[286 114]
+ [ 92 308]]
 Classification report:
               precision    recall  f1-score   support
 
-           0     0.5545    0.5600    0.5572       100
-           1     0.5556    0.5500    0.5528       100
+           0     0.7566    0.7150    0.7352       400
+           1     0.7299    0.7700    0.7494       400
 
-    accuracy                         0.5550       200
-   macro avg     0.5550    0.5550    0.5550       200
-weighted avg     0.5550    0.5550    0.5550       200
+    accuracy                         0.7425       800
+   macro avg     0.7432    0.7425    0.7423       800
+weighted avg     0.7432    0.7425    0.7423       800
 
 
 ========================================================================
@@ -122,22 +122,22 @@ Experiment: rotation_10
 Second view: rotation
 Blur radius: 0.0
 Rotation degrees: 10.0
-Accuracy: 0.5650
-F1: 0.4912
-AUC: 0.5803
-EER: 0.4600
+Accuracy: 0.7688
+F1: 0.7523
+AUC: 0.8555
+EER: 0.2275
 Confusion matrix:
-[[71 29]
- [58 42]]
+[[334  66]
+ [119 281]]
 Classification report:
               precision    recall  f1-score   support
 
-           0     0.5504    0.7100    0.6201       100
-           1     0.5915    0.4200    0.4912       100
+           0     0.7373    0.8350    0.7831       400
+           1     0.8098    0.7025    0.7523       400
 
-    accuracy                         0.5650       200
-   macro avg     0.5710    0.5650    0.5557       200
-weighted avg     0.5710    0.5650    0.5557       200
+    accuracy                         0.7688       800
+   macro avg     0.7736    0.7688    0.7677       800
+weighted avg     0.7736    0.7688    0.7677       800
 
 
 ========================================================================
@@ -146,22 +146,70 @@ Experiment: rotation_15
 Second view: rotation
 Blur radius: 0.0
 Rotation degrees: 15.0
-Accuracy: 0.6700
-F1: 0.6887
-AUC: 0.7235
-EER: 0.3100
+Accuracy: 0.8125
+F1: 0.8087
+AUC: 0.8936
+EER: 0.1800
 Confusion matrix:
-[[61 39]
- [27 73]]
+[[333  67]
+ [ 83 317]]
 Classification report:
               precision    recall  f1-score   support
 
-           0     0.6932    0.6100    0.6489       100
-           1     0.6518    0.7300    0.6887       100
+           0     0.8005    0.8325    0.8162       400
+           1     0.8255    0.7925    0.8087       400
 
-    accuracy                         0.6700       200
-   macro avg     0.6725    0.6700    0.6688       200
-weighted avg     0.6725    0.6700    0.6688       200
+    accuracy                         0.8125       800
+   macro avg     0.8130    0.8125    0.8124       800
+weighted avg     0.8130    0.8125    0.8124       800
+
+
+========================================================================
+
+Experiment: rotation_10_blur_2.0
+Second view: rotation_blur
+Blur radius: 2.0
+Rotation degrees: 10.0
+Accuracy: 0.8700
+F1: 0.8690
+AUC: 0.9540
+EER: 0.1325
+Confusion matrix:
+[[351  49]
+ [ 55 345]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.8645    0.8775    0.8710       400
+           1     0.8756    0.8625    0.8690       400
+
+    accuracy                         0.8700       800
+   macro avg     0.8701    0.8700    0.8700       800
+weighted avg     0.8701    0.8700    0.8700       800
+
+
+========================================================================
+
+Experiment: rotation_15_blur_2.0
+Second view: rotation_blur
+Blur radius: 2.0
+Rotation degrees: 15.0
+Accuracy: 0.9350
+F1: 0.9350
+AUC: 0.9806
+EER: 0.0650
+Confusion matrix:
+[[374  26]
+ [ 26 374]]
+Classification report:
+              precision    recall  f1-score   support
+
+           0     0.9350    0.9350    0.9350       400
+           1     0.9350    0.9350    0.9350       400
+
+    accuracy                         0.9350       800
+   macro avg     0.9350    0.9350    0.9350       800
+weighted avg     0.9350    0.9350    0.9350       800
 
 
 ========================================================================
