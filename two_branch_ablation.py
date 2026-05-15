@@ -24,8 +24,14 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from evaluation_metrics import get_eer_score, get_f1_score
 from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL, get_sample_paths
 
-from TwoBranchVisionTransformer import (
-    TwoBranchVisionTransformer as TwoBranchModel,
+# from TwoBranchVisionTransformer import (
+#     TwoBranchVisionTransformer as TwoBranchModel,
+#     create_two_branch_dataloaders,
+#     fit_two_stage_model,
+# )
+
+from TwoBranchResNet50 import (
+    TwoBranchResNet50 as TwoBranchModel,
     create_two_branch_dataloaders,
     fit_two_stage_model,
 )
@@ -280,7 +286,7 @@ def save_detailed_report(results, output_dir):
     Save a detailed text report with metrics and classification reports.
     """
 
-    output_path = output_dir / "detailed_report_visiontransformer.txt"
+    output_path = output_dir / "detailed_report_resnet50.txt"
     sections = []
     for result in results:
         sections.append(format_result(result))
@@ -313,7 +319,7 @@ def plot_metric_bars(results, output_dir):
 
     fig.suptitle("Two-Branch View Ablation Metrics")
     fig.tight_layout()
-    output_path = output_dir / "metric_comparison_visiontransformer.png"
+    output_path = output_dir / "metric_comparison_resnet50.png"
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return output_path
@@ -346,7 +352,7 @@ def plot_training_curves(results, output_dir):
 
     axes[1].legend(loc="lower right")
     fig.tight_layout()
-    output_path = output_dir / "training_curves_visiontransformer.png"
+    output_path = output_dir / "training_curves_resnet50.png"
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return output_path
