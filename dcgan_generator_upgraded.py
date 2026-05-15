@@ -31,6 +31,7 @@ EPOCHS = 10
 LR = 0.0002
 BETA1 = 0.5
 INSTANCE_NOISE_STD = 0.1
+FID_SAMPLE_COUNT = 256
 
 PROJECT_DIR = Path(__file__).resolve().parent
 FAKE_DIRS = [
@@ -50,6 +51,10 @@ def get_run_dir(epochs, run_name=""):
 
 def get_output_dir(epochs, run_name=""):
     return get_run_dir(epochs, run_name) / "dcgan_outputs"
+
+
+def get_fid_samples_dir(epochs, run_name=""):
+    return get_run_dir(epochs, run_name) / "fid_samples"
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -173,6 +178,30 @@ def save_generated_images(images, epoch, output_dir, n=8):
     save_image(grid, output_dir / f"epoch_{epoch:03d}.png")
 
 
+@torch.no_grad()
+def save_fid_samples(generator, sample_count, output_dir, batch_size=BATCH_SIZE):
+    """
+    Generate and save individual images for later FID computation.
+
+    Unlike the epoch preview grids, these samples are stored one image per file
+    so they can be used directly by FID evaluation scripts.
+    """
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    generator.eval()
+    saved = 0
+
+    while saved < sample_count:
+        current_batch_size = min(batch_size, sample_count - saved)
+        noise = torch.randn(current_batch_size, LATENT_DIM, 1, 1, device=device)
+        generated_images = generator(noise).detach().cpu()
+        generated_images = (generated_images + 1) / 2
+
+        for image in generated_images:
+            save_image(image, output_dir / f"sample_{saved:05d}.png")
+            saved += 1
+
+
 def append_metrics(run_dir, epoch, loss_d, loss_g, instance_noise_std):
     run_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = run_dir / "training_metrics.csv"
@@ -269,12 +298,19 @@ def parse_args():
         default=INSTANCE_NOISE_STD,
         help=f"Initial std for instance noise, linearly decayed to 0 by the last epoch (default: {INSTANCE_NOISE_STD})",
     )
+    parser.add_argument(
+        "--fid-samples",
+        type=int,
+        default=FID_SAMPLE_COUNT,
+        help="Number of individual generated images to save at the end for FID computation.",
+    )
     return parser.parse_args()
 
 
-def main(epochs, run_name, base_instance_noise_std):
+def main(epochs, run_name, base_instance_noise_std, fid_samples):
     run_dir = get_run_dir(epochs, run_name)
     output_dir = get_output_dir(epochs, run_name)
+    fid_output_dir = get_fid_samples_dir(epochs, run_name)
     print(f"Running on device: {device}")
     print(f"Dataset size: {len(dataset)} images")
     print(f"Saving outputs to: {run_dir}")
@@ -289,9 +325,12 @@ def main(epochs, run_name, base_instance_noise_std):
         save_generated_images(preview_images, epoch, output_dir, n=8)
         append_metrics(run_dir, epoch, loss_D, loss_G, instance_noise_std)
 
+    print(f"Saving {fid_samples} individual generated images for FID to: {fid_output_dir}")
+    save_fid_samples(generator, fid_samples, fid_output_dir)
+
 
 if __name__ == "__main__":
     args = parse_args()
     dataset = FakeImageDataset(FAKE_DIRS, image_size=IMAGE_SIZE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
-    main(args.epochs, args.run_name, args.instance_noise_std)
+    main(args.epochs, args.run_name, args.instance_noise_std, args.fid_samples)
