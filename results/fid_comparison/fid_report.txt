@@ -1,0 +1,3 @@
+FID comparison
+========================================
+DCGAN: FID=189.9318 | fake_images=256 | real_images=256

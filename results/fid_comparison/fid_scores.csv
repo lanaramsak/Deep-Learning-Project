@@ -1,0 +1,2 @@
+model,fid,n_fake,n_real
+DCGAN,189.9318122376465,256,256
