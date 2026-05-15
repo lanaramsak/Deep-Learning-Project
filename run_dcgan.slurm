@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=multiple_models
 #SBATCH --output=multiple_models.%j.out
+#SBATCH --qos=gpu_batch
 #SBATCH --gres=gpu:1
 #SBATCH --time=08:00:00
 #SBATCH --mem=16G
