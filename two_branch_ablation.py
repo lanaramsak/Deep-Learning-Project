@@ -22,7 +22,7 @@ import torch
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score
 
 from evaluation_metrics import get_eer_score, get_f1_score
-from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL
+from import_data import DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL, get_sample_paths
 
 from TwoBranchVisionTransformer import (
     TwoBranchVisionTransformer as TwoBranchModel,
@@ -89,6 +89,7 @@ def get_experiments(include_rotation=True):
     - an identity control (`original_only`)
     - several blur strengths
     - several rotation angles
+    - selected combined `rotation + blur` views
     """
 
     experiments = [
@@ -98,13 +99,25 @@ def get_experiments(include_rotation=True):
         make_experiment("blur_3.0", "blur", blur_radius=3.0),
         make_experiment("rotation_5", "rotation", rotation_degrees=5.0),
         make_experiment("rotation_10", "rotation", rotation_degrees=10.0),
-        make_experiment("rotation_15", "rotation", rotation_degrees=15.0)
+        make_experiment("rotation_15", "rotation", rotation_degrees=15.0),
+        make_experiment(
+            "rotation_10_blur_2.0",
+            "rotation_blur",
+            blur_radius=2.0,
+            rotation_degrees=10.0,
+        ),
+        make_experiment(
+            "rotation_15_blur_2.0",
+            "rotation_blur",
+            blur_radius=2.0,
+            rotation_degrees=15.0,
+        ),
     ]
 
     return experiments
 
 
-def run_single_experiment(experiment):
+def run_single_experiment(experiment, paths, labels):
     """
     Train and evaluate one ablation setting.
 
@@ -113,8 +126,8 @@ def run_single_experiment(experiment):
     """
 
     train_loader, val_loader = create_two_branch_dataloaders(
-        paths=DEFAULT_PATHS_SMALL,
-        labels=DEFAULT_Y_SMALL,
+        paths=paths,
+        labels=labels,
         image_size=224,
         second_view_type=experiment["second_view_type"],
         blur_radius=experiment["blur_radius"],
@@ -128,7 +141,7 @@ def run_single_experiment(experiment):
     model = TwoBranchModel(
         num_classes=2,
         # Keep ablations comparable and focused on the second-view effect.
-        pretrained=False,
+        pretrained=True,
         dropout=0.3,
     )
 
@@ -302,6 +315,12 @@ def parse_args():
         action="store_true",
         help="Skip rotation experiments and only compare blur against the original-only control.",
     )
+    parser.add_argument(
+        "--n",
+        type=int,
+        default=None,
+        help="Optional number of samples per class. If omitted, the default balanced sample set is used.",
+    )
     return parser.parse_args()
 
 
@@ -319,18 +338,22 @@ def main():
     args = parse_args()
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    if args.n is None:
+        paths, labels = DEFAULT_PATHS_SMALL, DEFAULT_Y_SMALL
+    else:
+        paths, labels = get_sample_paths(n=args.n)
 
     experiments = get_experiments(include_rotation=not args.no_rotation)
     results = []
 
     print(f"Running on device: {device}")
-    print(f"Dataset size: {len(DEFAULT_PATHS_SMALL)} images")
+    print(f"Dataset size: {len(paths)} images")
 
     for experiment in experiments:
         # Each experiment changes only the second-view transformation while
         # keeping the rest of the setup fixed.
         print(f"\nRunning experiment: {experiment['label']}")
-        result = run_single_experiment(experiment)
+        result = run_single_experiment(experiment, paths, labels)
         results.append(result)
         print(format_result(result))
 
