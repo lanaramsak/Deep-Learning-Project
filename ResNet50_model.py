@@ -18,7 +18,7 @@ from torch.utils.data import random_split
 from import_data import get_sample_paths, PathLabelDataset, build_transform
 
 random.seed(42)
-N_SAMPLES_PER_CLASS = 2000
+N_SAMPLES_PER_CLASS = 5000
 
 # Get DataLoaders for training and testing: This function collects image paths and labels, creates a dataset, splits it into training and testing sets, and returns two separate DataLoaders.
 def get_loaders(n=N_SAMPLES_PER_CLASS, batch_size=32, train_split=0.8):
